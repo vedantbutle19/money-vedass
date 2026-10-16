@@ -2,17 +2,22 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Ensure data folder exists
+// Ensure data folder exists if using file path
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+const defaultDbPath = process.env.VERCEL ? path.join('/tmp', 'finora.db') : path.join(DATA_DIR, 'finora.db');
+const DB_PATH = process.env.DB_PATH || defaultDbPath;
+if (DB_PATH !== ':memory:' && !fs.existsSync(path.dirname(DB_PATH))) {
+  try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  } catch {}
 }
 
-const DB_PATH = path.join(DATA_DIR, 'finora.db');
 export const db = new DatabaseSync(DB_PATH);
 
 // Setup database optimizations & constraints
-db.exec('PRAGMA journal_mode = WAL;');
+if (DB_PATH !== ':memory:') {
+  db.exec('PRAGMA journal_mode = WAL;');
+}
 db.exec('PRAGMA foreign_keys = ON;');
 
 // Initialize tables
@@ -162,6 +167,7 @@ export function initDatabase() {
       otp_code TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       used INTEGER DEFAULT 0,
+      attempts INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -169,6 +175,7 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions (user_id);
     CREATE INDEX IF NOT EXISTS idx_tx_acc ON transactions (account_id);
     CREATE INDEX IF NOT EXISTS idx_budget_month_year ON budgets (year, month);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_unique ON budgets (user_id, category_id, month, year);
     CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
     CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts (user_id);
@@ -188,6 +195,12 @@ export function initDatabase() {
 
   try {
     db.exec("ALTER TABLE users ADD COLUMN phone TEXT;");
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    db.exec("ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0;");
   } catch {
     // Column already exists
   }

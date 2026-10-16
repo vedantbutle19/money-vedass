@@ -2,8 +2,15 @@ import { Router, Response } from 'express';
 import crypto from 'node:crypto';
 import { db, createInitialUserAccounts } from '../db.ts';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.ts';
+import { createRateLimiter } from '../middleware/rateLimiter.ts';
 
 const router = Router();
+
+// Rate limiters for authentication endpoints to prevent abuse and brute force
+const signupLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10, name: 'signup', message: 'Too many signup attempts. Please try again after 15 minutes.' });
+const loginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 15, name: 'login', message: 'Too many login attempts. Please try again after 15 minutes.' });
+const otpSendLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5, name: 'otp-send', message: 'Too many OTP requests. Please wait before requesting another code.' });
+const otpResetLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10, name: 'otp-reset', message: 'Too many password reset attempts. Please try again later.' });
 
 // Password hashing helpers using built-in node:crypto
 export function hashPassword(password: string): string {
@@ -38,7 +45,7 @@ function createSession(userId: string, email: string): string {
 }
 
 // POST /api/auth/signup - Register new user first
-router.post('/signup', (req, res: Response) => {
+router.post('/signup', signupLimiter, (req, res: Response) => {
   try {
     const { name, email, phone, password } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -47,8 +54,8 @@ router.post('/signup', (req, res: Response) => {
     if (!email || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ error: 'Valid email address is required' });
     }
-    if (!password || typeof password !== 'string' || password.length < 4) {
-      return res.status(400).json({ error: 'Password must be at least 4 characters long' });
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -115,7 +122,7 @@ router.post('/signup', (req, res: Response) => {
 });
 
 // POST /api/auth/login - Strict login (unknown users rejected)
-router.post('/login', (req, res: Response) => {
+router.post('/login', loginLimiter, (req, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -173,7 +180,7 @@ function maskPhone(phone: string): string {
 }
 
 // POST /api/auth/send-otp - Generate & send 6-digit SMS OTP for password reset
-router.post('/send-otp', async (req, res: Response) => {
+router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
   try {
     const { email, phone } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -210,14 +217,14 @@ router.post('/send-otp', async (req, res: Response) => {
     // Invalidate any previous unused OTPs for this email
     db.prepare('UPDATE otp_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(cleanEmail);
 
-    // Generate 6-digit OTP
+    // Generate 6-digit cryptographically secure OTP
     const otpCode = crypto.randomInt(100000, 999999).toString();
     const otpId = `otp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
 
     db.prepare(`
-      INSERT INTO otp_codes (id, user_id, email, phone, otp_code, expires_at, used)
-      VALUES (?, ?, ?, ?, ?, ?, 0)
+      INSERT INTO otp_codes (id, user_id, email, phone, otp_code, expires_at, used, attempts)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0)
     `).run(otpId, user.id, cleanEmail, cleanPhone, otpCode, expiresAt);
 
     const smsText = `[Money Vedass] Your SMS OTP to reset password for ${cleanEmail} is ${otpCode}. Valid for 5 minutes. Do not share this code.`;
@@ -244,22 +251,27 @@ router.post('/send-otp', async (req, res: Response) => {
         });
         externalGatewaySent = smsRes.ok;
       } catch (e) {
-        console.warn('External SMS gateway error, falling back to built-in SMS simulator:', e);
+        console.warn('External SMS gateway error:', e);
       }
     }
+
+    const isNonProduction = process.env.NODE_ENV !== 'production';
+    const allowDevOtpSimulation = isNonProduction && process.env.ENABLE_DEV_OTP_SIMULATION === 'true';
 
     res.json({
       success: true,
       maskedPhone: maskPhone(cleanPhone),
       expiresInSeconds: 300,
       externalGatewaySent,
-      // Provide simulated SMS notification payload so user receives OTP immediately on-screen
-      smsNotification: {
-        sender: 'VM-MNYVDS',
-        recipient: cleanPhone,
-        otpCode,
-        text: smsText,
-      },
+      // Security: Plaintext OTP is strictly gated to local dev simulation flag only, NEVER exposed in production
+      ...(allowDevOtpSimulation ? {
+        smsNotification: {
+          sender: 'VM-MNYVDS',
+          recipient: cleanPhone,
+          otpCode,
+          text: smsText,
+        },
+      } : {}),
       message: `6-digit SMS OTP sent to mobile ${maskPhone(cleanPhone)}`,
     });
   } catch (err: any) {
@@ -268,7 +280,7 @@ router.post('/send-otp', async (req, res: Response) => {
 });
 
 // POST /api/auth/reset-password - Verify SMS OTP and reset password for a registered email
-router.post('/reset-password', (req, res: Response) => {
+router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
   try {
     const { email, otp, newPassword } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -277,8 +289,8 @@ router.post('/reset-password', (req, res: Response) => {
     if (!otp || typeof otp !== 'string' || otp.trim().length !== 6) {
       return res.status(400).json({ error: 'Valid 6-digit SMS OTP is required' });
     }
-    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 4) {
-      return res.status(400).json({ error: 'New password must be at least 4 characters long' });
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters long' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -291,16 +303,16 @@ router.post('/reset-password', (req, res: Response) => {
       });
     }
 
-    // Verify OTP in database
+    // Verify latest active OTP for this email
     const otpRecord = db.prepare(`
       SELECT * FROM otp_codes
-      WHERE LOWER(email) = ? AND otp_code = ? AND used = 0
+      WHERE LOWER(email) = ? AND used = 0
       ORDER BY created_at DESC LIMIT 1
-    `).get(cleanEmail, cleanOtp) as any;
+    `).get(cleanEmail) as any;
 
     if (!otpRecord) {
       return res.status(400).json({
-        error: 'Invalid SMS OTP code. Please check the 6-digit OTP and try again.',
+        error: 'No active OTP request found. Please request a new OTP.',
       });
     }
 
@@ -309,6 +321,31 @@ router.post('/reset-password', (req, res: Response) => {
       return res.status(400).json({
         error: 'SMS OTP has expired. Please request a new OTP.',
       });
+    }
+
+    // Check brute-force attempts on this OTP
+    if ((otpRecord.attempts || 0) >= 5) {
+      db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
+      return res.status(400).json({
+        error: 'Too many failed attempts. This OTP has been invalidated. Please request a new OTP.',
+      });
+    }
+
+    // Check code match
+    if (otpRecord.otp_code !== cleanOtp) {
+      const newAttempts = (otpRecord.attempts || 0) + 1;
+      const remaining = 5 - newAttempts;
+      if (remaining <= 0) {
+        db.prepare('UPDATE otp_codes SET used = 1, attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
+        return res.status(400).json({
+          error: 'Invalid SMS OTP code. Maximum attempts exceeded. Please request a new OTP.',
+        });
+      } else {
+        db.prepare('UPDATE otp_codes SET attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
+        return res.status(400).json({
+          error: `Invalid SMS OTP code. You have ${remaining} attempt(s) remaining.`,
+        });
+      }
     }
 
     // Mark OTP as used and update user password
@@ -321,6 +358,8 @@ router.post('/reset-password', (req, res: Response) => {
         SET password_hash = ?, updated_at = datetime('now')
         WHERE id = ?
       `).run(passwordHash, user.id);
+      // Invalidate all active sessions for this user so they must log in with the new password
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
       db.exec('COMMIT;');
     } catch (e) {
       db.exec('ROLLBACK;');

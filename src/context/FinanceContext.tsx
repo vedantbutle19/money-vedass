@@ -264,15 +264,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [accounts, transactions, selectedMonth]);
 
   const { totalBudgetLimit, totalBudgetSpent, budgetUsagePercent } = useMemo(() => {
-    const limit = budgets.reduce((sum, b) => sum + b.limit, 0);
-    const spent = budgets.reduce((sum, b) => sum + b.spent, 0);
+    const monthBudgets = budgets.filter((b) => Number(b.month) === Number(selectedMonth.month) && Number(b.year) === Number(selectedMonth.year));
+    const activeBudgets = monthBudgets.length > 0 ? monthBudgets : budgets;
+    const limit = activeBudgets.reduce((sum, b) => sum + Number(b.limit), 0);
+    const spent = activeBudgets.reduce((sum, b) => sum + Number(b.spent), 0);
     const usage = limit > 0 ? (spent / limit) * 100 : 0;
     return {
-      totalBudgetLimit: limit,
-      totalBudgetSpent: spent,
+      totalBudgetLimit: Math.round((limit + Number.EPSILON) * 100) / 100,
+      totalBudgetSpent: Math.round((spent + Number.EPSILON) * 100) / 100,
       budgetUsagePercent: Number(usage.toFixed(1)),
     };
-  }, [budgets]);
+  }, [budgets, selectedMonth]);
 
   const unreadNotificationCount = useMemo(() => {
     return notifications.filter((n) => !n.read).length;
@@ -349,7 +351,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addBudget = async (categoryId: string, categoryName: string, limit: number) => {
-    const created = await financeService.createBudget(categoryId, categoryName, limit);
+    const created = await financeService.createBudget(categoryId, categoryName, limit, selectedMonth.month, selectedMonth.year);
     await loadData();
     showToast(`Budget for ${categoryName} created`, 'success');
     return created;
@@ -378,9 +380,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const contributeToGoal = async (id: string, amount: number) => {
     const g = goals.find((item) => item.id === id);
     if (!g) return;
-    const newCurrent = g.currentAmount + amount;
-    await financeService.updateGoal(id, { currentAmount: newCurrent });
-    // Also record an expense or transfer
+    await financeService.contributeToGoal(id, amount);
     await loadData();
     showToast(`Contributed ${formatCurrency(amount)} to ${g.name}!`, 'success');
   };
@@ -408,10 +408,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSubscriptionStatus = async (id: string) => {
     const s = subscriptions.find((item) => item.id === id);
     if (!s) return;
-    const newStatus = s.status === 'active' ? 'paused' : 'active';
-    await financeService.updateSubscription(id, { status: newStatus });
+    const updated = await financeService.toggleSubscriptionStatus(id);
     await loadData();
-    showToast(`Subscription ${newStatus === 'active' ? 'resumed' : 'paused'}`, 'info');
+    showToast(`Subscription ${updated.status === 'active' ? 'resumed' : 'paused'}`, 'info');
   };
 
   const addRecurring = async (rec: Omit<RecurringTransaction, 'id'>) => {
@@ -437,10 +436,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleRecurringStatus = async (id: string) => {
     const r = recurring.find((item) => item.id === id);
     if (!r) return;
-    const newStatus = r.status === 'active' ? 'paused' : 'active';
-    await financeService.updateRecurring(id, { status: newStatus });
+    const updated = await financeService.toggleRecurringStatus(id);
     await loadData();
-    showToast(`Recurring payment ${newStatus === 'active' ? 'activated' : 'paused'}`, 'info');
+    showToast(`Recurring payment ${updated.status === 'active' ? 'activated' : 'paused'}`, 'info');
   };
 
   const markNotificationRead = async (id: string) => {

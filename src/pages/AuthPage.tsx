@@ -109,8 +109,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         setError('Please enter the 6-digit SMS OTP sent to your mobile number');
         return;
       }
-      if (!password || password.length < 4) {
-        setError('New password must be at least 4 characters');
+      if (!password || password.length < 8) {
+        setError('New password must be at least 8 characters');
         return;
       }
       if (password !== confirmPassword) {
@@ -168,8 +168,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         setError('Please choose a password');
         return;
       }
-      if (password.length < 4) {
-        setError('Password must be at least 4 characters');
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters');
         return;
       }
       if (password !== confirmPassword) {

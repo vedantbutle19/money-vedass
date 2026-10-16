@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.ts';
+import { requireAuth } from '../middleware/auth.ts';
 
 const router = Router();
 
@@ -21,8 +22,8 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/categories
-router.post('/', (req: Request, res: Response) => {
+// POST /api/categories - Requires authentication
+router.post('/', requireAuth, (req: Request, res: Response) => {
   try {
     const { id, name, iconName, color, type } = req.body;
     if (!id || !name) {

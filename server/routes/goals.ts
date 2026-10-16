@@ -103,6 +103,38 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// POST /api/goals/:id/contribute - Record contribution towards savings goal
+router.post('/:id/contribute', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { amount } = req.body;
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Contribution amount must be a positive number greater than zero' });
+    }
+    const cleanAmount = Math.round((numAmount + Number.EPSILON) * 100) / 100;
+
+    const existing = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    if (!existing) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+
+    const newCurrent = Math.round((Number(existing.current_amount) + cleanAmount + Number.EPSILON) * 100) / 100;
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE goals
+      SET current_amount = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(newCurrent, now, req.params.id, userId);
+
+    const updated = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    res.json(formatGoal(updated));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/goals/:id
 router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
   try {

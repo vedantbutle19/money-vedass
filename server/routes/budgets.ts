@@ -42,7 +42,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// POST /api/budgets - Tied to logged-in user
+// POST /api/budgets - Tied to logged-in user with upsert & existing spend sync
 router.post('/', (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
@@ -51,13 +51,46 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Category ID and limit are required' });
     }
 
-    const id = `b_${userId}_${categoryId}_${Date.now()}`;
+    const cleanLimit = Math.round((Number(limit) + Number.EPSILON) * 100) / 100;
+    if (isNaN(cleanLimit) || cleanLimit < 0) {
+      return res.status(400).json({ error: 'Budget limit must be a non-negative number' });
+    }
+
+    const numMonth = Number(month);
+    const numYear = Number(year);
     const now = new Date().toISOString();
+
+    // Calculate existing spent amount for this category in this month/year from ledger
+    const monthPadded = String(numMonth).padStart(2, '0');
+    const existingSpentRow = db.prepare(`
+      SELECT SUM(amount) as total FROM transactions
+      WHERE user_id = ? AND category_id = ? AND type = 'expense'
+        AND strftime('%Y-%m', date) = ?
+    `).get(userId, categoryId, `${numYear}-${monthPadded}`) as { total: number | null };
+    const currentSpent = existingSpentRow && existingSpentRow.total ? Math.round(Number(existingSpentRow.total) * 100) / 100 : 0;
+
+    // Check if budget allocation already exists for this month/year
+    const existingBudget = db.prepare(`
+      SELECT id FROM budgets WHERE user_id = ? AND category_id = ? AND month = ? AND year = ?
+    `).get(userId, categoryId, numMonth, numYear) as any;
+
+    if (existingBudget) {
+      db.prepare(`
+        UPDATE budgets
+        SET limit_amount = ?, category_name = ?, spent = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(cleanLimit, categoryName || categoryId, currentSpent, now, existingBudget.id, userId);
+
+      const updated = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(existingBudget.id, userId);
+      return res.status(200).json(formatBudget(updated));
+    }
+
+    const id = `b_${userId}_${categoryId}_${numYear}_${numMonth}`;
 
     db.prepare(`
       INSERT INTO budgets (id, user_id, category_id, category_name, month, year, limit_amount, spent, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-    `).run(id, userId, categoryId, categoryName || categoryId, Number(month), Number(year), Number(limit), now, now);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, userId, categoryId, categoryName || categoryId, numMonth, numYear, cleanLimit, currentSpent, now, now);
 
     const created = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatBudget(created));

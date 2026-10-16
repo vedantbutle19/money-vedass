@@ -25,9 +25,19 @@ const PORT = Number(process.env.PORT) || 5000;
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// CORS Middleware
+// Security headers middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// CORS Middleware
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   if (req.method === 'OPTIONS') {
@@ -36,17 +46,19 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Request logger
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    if (req.originalUrl.startsWith('/api')) {
-      console.log(`[API] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
-    }
+// Request logger (in non-test environments)
+if (process.env.NODE_ENV !== 'test') {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      if (req.originalUrl.startsWith('/api')) {
+        console.log(`[API] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+      }
+    });
+    next();
   });
-  next();
-});
+}
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {
@@ -101,28 +113,34 @@ app.use('/api/*', (req: Request, res: Response) => {
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled Server Error:', err);
-  res.status(500).json({ error: err.message || 'Internal Server Error' });
+  const isDev = process.env.NODE_ENV !== 'production';
+  res.status(500).json({ error: isDev ? (err.message || 'Internal Server Error') : 'An unexpected internal error occurred.' });
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Finora Backend Server running on http://localhost:${PORT}`);
-  console.log(`📁 Persistent SQLite database initialized at data/finora.db`);
-});
-
-// Graceful shutdown
-const shutdown = () => {
-  console.log('Shutting down Finora server gracefully...');
-  server.close(() => {
-    try {
-      db.close();
-      console.log('Database connection closed.');
-    } catch {}
-    process.exit(0);
+let server: any = null;
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Finora Backend Server running on http://localhost:${PORT}`);
+    console.log(`📁 Persistent SQLite database initialized at data/finora.db`);
   });
-};
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  // Graceful shutdown
+  const shutdown = () => {
+    console.log('Shutting down Finora server gracefully...');
+    if (server) {
+      server.close(() => {
+        try {
+          db.close();
+          console.log('Database connection closed.');
+        } catch {}
+        process.exit(0);
+      });
+    }
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
 
 export { app, server };
 export default app;

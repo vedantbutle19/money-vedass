@@ -37,6 +37,28 @@ function formatTransaction(row: any) {
   };
 }
 
+// Helper to safely extract UTC year and month from ISO date string (YYYY-MM-DD)
+// This avoids timezone boundary shifts where local midnight parses as previous day in negative timezones
+function parseDateParts(dateStr: string): { year: number; month: number } {
+  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length >= 2) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        return { year: y, month: m };
+      }
+    }
+  }
+  const d = new Date(dateStr);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
+
+// Helper to round financial numbers to 2 decimal places
+function roundCurrency(val: number): number {
+  return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+}
+
 // Helper to adjust balance & budget scoped to a specific user
 function applyTransactionEffects(userId: string, tx: {
   type: string;
@@ -46,21 +68,20 @@ function applyTransactionEffects(userId: string, tx: {
   categoryId: string;
   date: string;
 }) {
-  const amt = Number(tx.amount);
+  const amt = roundCurrency(tx.amount);
+  const { year, month } = parseDateParts(tx.date);
+
   if (tx.type === 'expense') {
-    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
     
     // Update budget spent for this category, month/year, and user
-    const d = new Date(tx.date);
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
-    db.prepare(`UPDATE budgets SET spent = spent + ?, updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
+    db.prepare(`UPDATE budgets SET spent = ROUND(spent + ?, 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
       .run(amt, tx.categoryId, month, year, userId);
   } else if (tx.type === 'income') {
-    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
   } else if (tx.type === 'transfer' && tx.toAccountId) {
-    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
-    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
   }
 }
 
@@ -73,20 +94,19 @@ function revertTransactionEffects(userId: string, tx: {
   categoryId: string;
   date: string;
 }) {
-  const amt = Number(tx.amount);
+  const amt = roundCurrency(tx.amount);
+  const { year, month } = parseDateParts(tx.date);
+
   if (tx.type === 'expense') {
-    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
     
-    const d = new Date(tx.date);
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
-    db.prepare(`UPDATE budgets SET spent = MAX(0, spent - ?), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
+    db.prepare(`UPDATE budgets SET spent = ROUND(MAX(0, spent - ?), 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
       .run(amt, tx.categoryId, month, year, userId);
   } else if (tx.type === 'income') {
-    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
   } else if (tx.type === 'transfer' && tx.toAccountId) {
-    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
-    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
   }
 }
 
@@ -175,6 +195,36 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Missing required transaction fields' });
     }
 
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Transaction amount must be a positive number greater than zero' });
+    }
+    const cleanAmount = roundCurrency(numAmount);
+
+    if (!['expense', 'income', 'transfer'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid transaction type. Must be expense, income, or transfer' });
+    }
+
+    // Verify source account belongs strictly to authenticated user
+    const sourceAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    if (!sourceAcc) {
+      return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
+    }
+
+    // If transfer, verify destination account belongs to user and is distinct
+    if (type === 'transfer') {
+      if (!toAccountId || typeof toAccountId !== 'string') {
+        return res.status(400).json({ error: 'Destination account ID is required for transfers' });
+      }
+      if (toAccountId === accountId) {
+        return res.status(400).json({ error: 'Source and destination accounts cannot be identical' });
+      }
+      const destAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(toAccountId, userId);
+      if (!destAcc) {
+        return res.status(400).json({ error: 'Invalid destination account ID. Destination account does not exist or does not belong to your account.' });
+      }
+    }
+
     const id = `tx_${Date.now()}`;
     const tagsJson = tags ? JSON.stringify(tags) : null;
     const now = new Date().toISOString();
@@ -194,7 +244,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
         toAccountId || null,
         categoryId,
         type,
-        Number(amount),
+        cleanAmount,
         currency || 'INR',
         date,
         merchant || null,
@@ -211,7 +261,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       // Auto update balances and budgets for current user
       applyTransactionEffects(userId, {
         type,
-        amount: Number(amount),
+        amount: cleanAmount,
         accountId,
         toAccountId,
         categoryId,
@@ -262,7 +312,35 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     const newToAccountId = toAccountId !== undefined ? toAccountId : existing.to_account_id;
     const newCategoryId = categoryId ?? existing.category_id;
     const newType = type ?? existing.type;
-    const newAmount = amount !== undefined ? Number(amount) : Number(existing.amount);
+    const rawAmount = amount !== undefined ? Number(amount) : Number(existing.amount);
+    if (isNaN(rawAmount) || !isFinite(rawAmount) || rawAmount <= 0) {
+      return res.status(400).json({ error: 'Transaction amount must be a positive number greater than zero' });
+    }
+    const newAmount = roundCurrency(rawAmount);
+
+    if (!['expense', 'income', 'transfer'].includes(newType)) {
+      return res.status(400).json({ error: 'Invalid transaction type' });
+    }
+
+    // Verify source account belongs to authenticated user
+    const sourceAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newAccountId, userId);
+    if (!sourceAcc) {
+      return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to you.' });
+    }
+
+    if (newType === 'transfer') {
+      if (!newToAccountId) {
+        return res.status(400).json({ error: 'Destination account is required for transfers' });
+      }
+      if (newToAccountId === newAccountId) {
+        return res.status(400).json({ error: 'Source and destination accounts cannot be identical' });
+      }
+      const destAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newToAccountId, userId);
+      if (!destAcc) {
+        return res.status(400).json({ error: 'Invalid destination account ID. Account does not exist or does not belong to you.' });
+      }
+    }
+
     const newCurrency = currency ?? (existing.currency || 'INR');
     const newDate = date ?? existing.date;
     const newMerchant = merchant !== undefined ? merchant : existing.merchant;

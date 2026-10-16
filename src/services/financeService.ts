@@ -295,11 +295,11 @@ export const financeService = {
     }
   },
 
-  async createBudget(categoryId: string, categoryName: string, limit: number): Promise<Budget> {
+  async createBudget(categoryId: string, categoryName: string, limit: number, month: number = 10, year: number = 2026): Promise<Budget> {
     try {
       return await apiRequest<Budget>('/budgets', {
         method: 'POST',
-        body: JSON.stringify({ categoryId, categoryName, limit, month: 10, year: 2026 }),
+        body: JSON.stringify({ categoryId, categoryName, limit, month, year }),
       });
     } catch (e) {
       const budgets = await this.getBudgets();
@@ -307,8 +307,8 @@ export const financeService = {
         id: `b_${categoryId}_${Date.now()}`,
         categoryId: categoryId as any,
         categoryName,
-        month: 10,
-        year: 2026,
+        month,
+        year,
         limit,
         spent: 0,
       };
@@ -372,6 +372,23 @@ export const financeService = {
     }
   },
 
+  async contributeToGoal(id: string, amount: number): Promise<Goal> {
+    try {
+      return await apiRequest<Goal>(`/goals/${id}/contribute`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      });
+    } catch (e) {
+      const goals = await this.getGoals();
+      const index = goals.findIndex((g) => g.id === id);
+      if (index === -1) throw new Error('Goal not found');
+      const updated = { ...goals[index], currentAmount: goals[index].currentAmount + amount };
+      goals[index] = updated;
+      saveStorage(STORAGE_KEYS.GOALS, goals);
+      return updated;
+    }
+  },
+
   // Subscriptions
   async getSubscriptions(): Promise<Subscription[]> {
     try {
@@ -425,6 +442,20 @@ export const financeService = {
     }
   },
 
+  async toggleSubscriptionStatus(id: string): Promise<Subscription> {
+    try {
+      return await apiRequest<Subscription>(`/subscriptions/${id}/toggle`, { method: 'PATCH' });
+    } catch (e) {
+      const subs = await this.getSubscriptions();
+      const index = subs.findIndex((s) => s.id === id);
+      if (index === -1) throw new Error('Subscription not found');
+      const updated = { ...subs[index], status: (subs[index].status === 'active' ? 'paused' : 'active') as any };
+      subs[index] = updated;
+      saveStorage(STORAGE_KEYS.SUBSCRIPTIONS, subs);
+      return updated;
+    }
+  },
+
   // Recurring
   async getRecurring(): Promise<RecurringTransaction[]> {
     try {
@@ -475,6 +506,20 @@ export const financeService = {
     } catch (e) {
       const items = await this.getRecurring();
       saveStorage(STORAGE_KEYS.RECURRING, items.filter((r) => r.id !== id));
+    }
+  },
+
+  async toggleRecurringStatus(id: string): Promise<RecurringTransaction> {
+    try {
+      return await apiRequest<RecurringTransaction>(`/recurring/${id}/toggle`, { method: 'PATCH' });
+    } catch (e) {
+      const items = await this.getRecurring();
+      const index = items.findIndex((r) => r.id === id);
+      if (index === -1) throw new Error('Recurring not found');
+      const updated = { ...items[index], status: (items[index].status === 'active' ? 'paused' : 'active') as any };
+      items[index] = updated;
+      saveStorage(STORAGE_KEYS.RECURRING, items);
+      return updated;
     }
   },
 

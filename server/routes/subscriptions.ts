@@ -105,6 +105,27 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// PATCH /api/subscriptions/:id/toggle - Toggle active / paused
+router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    if (!existing) {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+
+    const newStatus = existing.status === 'active' ? 'paused' : 'active';
+    const now = new Date().toISOString();
+
+    db.prepare('UPDATE subscriptions SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(newStatus, now, req.params.id, userId);
+
+    const updated = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    res.json(formatSubscription(updated));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/subscriptions/:id
 router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
   try {
