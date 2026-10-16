@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: money-vedass-backend
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ALLOWED_ORIGIN
+        value: "*"
+      - key: DB_PATH
+        value: /var/data/finora.db
+    disk:
+      name: finora-data
+      mountPath: /var/data
+      sizeGB: 1

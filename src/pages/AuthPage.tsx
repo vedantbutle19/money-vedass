@@ -16,6 +16,7 @@ import {
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/common/Logo';
+import { API_BASE } from '../config/api';
 
 interface AuthPageProps {
   initialMode?: 'login' | 'signup';
@@ -74,7 +75,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch(`${API_BASE}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
@@ -124,7 +125,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
       setIsSubmitting(true);
       try {
-        const res = await fetch('/api/auth/reset-password', {
+        const res = await fetch(`${API_BASE}/auth/reset-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

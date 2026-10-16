@@ -51,7 +51,7 @@ function saveStorage<T>(key: string, data: T): void {
   }
 }
 
-const API_BASE = '/api';
+import { API_BASE } from '../config/api';
 
 export function getAuthToken(): string | null {
   return localStorage.getItem('finora_token') || sessionStorage.getItem('finora_token');
