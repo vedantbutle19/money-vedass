@@ -1,5 +1,6 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
+import { db } from '../server/db.ts';
 import { startTestServer, stopTestServer, apiRequest } from './testHelper.ts';
 
 describe('Security, IDOR Access Control & Features Suite', () => {
@@ -76,6 +77,20 @@ describe('Security, IDOR Access Control & Features Suite', () => {
       type: 'expense',
     });
     assert.strictEqual(unauth.status, 401);
+  });
+
+  test('System Category Protection: Authenticated user cannot overwrite core categories', async () => {
+    const overwriteAttempt = await apiRequest('POST', '/api/categories', {
+      id: 'salary',
+      name: 'Defaced Salary',
+      type: 'income',
+    }, userTokenA);
+    assert.strictEqual(overwriteAttempt.status, 403);
+    assert.match(overwriteAttempt.data.error, /Standard system categories are protected/);
+
+    // Verify system category remains intact
+    const salary = db.prepare('SELECT name FROM categories WHERE id = ?').get('salary') as any;
+    assert.strictEqual(salary.name, 'Salary & Professional');
   });
 
   test('Account Deletion Safeguard: Cannot delete account with linked transactions', async () => {
@@ -195,5 +210,29 @@ describe('Security, IDOR Access Control & Features Suite', () => {
     assert.ok(typeof healthRes.data.overallScore === 'number');
     assert.ok(['critical', 'needs_improvement', 'good', 'excellent'].includes(healthRes.data.tier));
     assert.ok(healthRes.data.components);
+  });
+
+  test('IDOR Protection: User A cannot bind User B account to subscriptions or recurring schedules', async () => {
+    // Attempt to create subscription with User B's account
+    const badSub = await apiRequest('POST', '/api/subscriptions', {
+      name: 'Malicious Sub',
+      amount: 499,
+      billingCycle: 'monthly',
+      nextBillingDate: '2026-11-01',
+      accountId: accountIdB,
+    }, userTokenA);
+    assert.strictEqual(badSub.status, 400);
+    assert.match(badSub.data.error, /does not belong to your account/);
+
+    // Attempt to create recurring schedule with User B's account
+    const badRec = await apiRequest('POST', '/api/recurring', {
+      name: 'Malicious Rec',
+      amount: 1000,
+      type: 'expense',
+      frequency: 'monthly',
+      accountId: accountIdB,
+    }, userTokenA);
+    assert.strictEqual(badRec.status, 400);
+    assert.match(badRec.data.error, /does not belong to your account/);
   });
 });

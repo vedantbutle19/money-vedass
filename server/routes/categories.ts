@@ -22,20 +22,42 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
+// Protected system categories that cannot be overwritten by regular users
+const SYSTEM_CATEGORY_IDS = new Set([
+  'housing',
+  'food',
+  'transport',
+  'shopping',
+  'entertainment',
+  'bills',
+  'health',
+  'salary',
+  'investment',
+  'transfer',
+  'other',
+]);
+
 // POST /api/categories - Requires authentication
 router.post('/', requireAuth, (req: Request, res: Response) => {
   try {
     const { id, name, iconName, color, type } = req.body;
-    if (!id || !name) {
+    if (!id || typeof id !== 'string' || !name || typeof name !== 'string') {
       return res.status(400).json({ error: 'Category id and name required' });
     }
+
+    const cleanId = id.trim().toLowerCase();
+    if (SYSTEM_CATEGORY_IDS.has(cleanId)) {
+      return res.status(403).json({ error: 'Standard system categories are protected and cannot be modified.' });
+    }
+
+    const cleanType = ['expense', 'income', 'both'].includes(type) ? type : 'expense';
 
     db.prepare(`
       INSERT OR REPLACE INTO categories (id, name, icon_name, color, type)
       VALUES (?, ?, ?, ?, ?)
-    `).run(id, name, iconName || 'Folder', color || '#6B7280', type || 'expense');
+    `).run(cleanId, name.trim(), iconName || 'Folder', color || '#6B7280', cleanType);
 
-    res.status(201).json({ id, name, iconName, color, type });
+    res.status(201).json({ id: cleanId, name: name.trim(), iconName, color, type: cleanType });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -201,17 +201,18 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
       });
     }
 
-    // If the user already has a phone number saved, verify last 10 digits match
-    if (user.phone && user.phone.replace(/\D/g, '').length >= 10) {
-      const savedDigits = user.phone.replace(/\D/g, '').slice(-10);
-      if (savedDigits !== inputDigits) {
-        return res.status(400).json({
-          error: `Mobile number does not match the registered phone ending in ${savedDigits.slice(-4)}.`,
-        });
-      }
-    } else {
-      // Save phone number for existing user who registered before phone field was added
-      db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(cleanPhone, user.id);
+    // Strict Security: Account must have a pre-registered mobile number on file
+    if (!user.phone || user.phone.replace(/\D/g, '').length < 10) {
+      return res.status(400).json({
+        error: 'This account does not have a registered mobile number for SMS OTP reset. Please sign in with your password or update your mobile number in Profile settings.',
+      });
+    }
+
+    const savedDigits = user.phone.replace(/\D/g, '').slice(-10);
+    if (savedDigits !== inputDigits) {
+      return res.status(400).json({
+        error: `Mobile number does not match the registered phone ending in ${savedDigits.slice(-4)}.`,
+      });
     }
 
     // Invalidate any previous unused OTPs for this email

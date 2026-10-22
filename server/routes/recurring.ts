@@ -41,6 +41,17 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Name, amount, type, frequency, and account required' });
     }
 
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Recurring amount must be a positive number greater than zero' });
+    }
+
+    // Verify account belongs strictly to authenticated user
+    const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    if (!userAcc) {
+      return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
+    }
+
     const id = `rec_${userId}_${Date.now()}`;
     const now = new Date().toISOString();
     const nextDate = nextRunDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -52,7 +63,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       id,
       userId,
       name,
-      Number(amount),
+      numAmount,
       type,
       frequency,
       Number(dayOfMonth),
@@ -81,6 +92,21 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     }
 
     const { name, amount, type, frequency, dayOfMonth, category, accountId, status, nextRunDate } = req.body;
+
+    if (amount !== undefined) {
+      const numAmount = Number(amount);
+      if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: 'Recurring amount must be a positive number greater than zero' });
+      }
+    }
+
+    if (accountId && accountId !== existing.account_id) {
+      const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+      if (!userAcc) {
+        return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
+      }
+    }
+
     const now = new Date().toISOString();
 
     db.prepare(`

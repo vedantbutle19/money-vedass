@@ -185,4 +185,26 @@ describe('Authentication & Security Suite', () => {
     const check = await apiRequest('GET', '/api/user/profile', undefined, token);
     assert.strictEqual(check.status, 401);
   });
+
+  test('POST /api/auth/send-otp - Rejects phone injection and protects accounts without registered phone', async () => {
+    // Register user without phone
+    const regRes = await apiRequest('POST', '/api/auth/signup', {
+      name: 'Bob NoPhone',
+      email: 'bob_nophone@example.com',
+      password: 'SecurePassword123!',
+    });
+    assert.strictEqual(regRes.status, 201);
+
+    // Attacker attempts to inject phone number into Bob's account via send-otp
+    const attackRes = await apiRequest('POST', '/api/auth/send-otp', {
+      email: 'bob_nophone@example.com',
+      phone: '9998887776',
+    });
+    assert.strictEqual(attackRes.status, 400);
+    assert.match(attackRes.data.error, /does not have a registered mobile number/);
+
+    // Verify Bob's phone was NOT modified in the database
+    const bob = db.prepare('SELECT phone FROM users WHERE email = ?').get('bob_nophone@example.com') as any;
+    assert.strictEqual(bob.phone, '');
+  });
 });

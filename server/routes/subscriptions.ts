@@ -40,6 +40,17 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Name, amount, billing cycle, account, and next billing date required' });
     }
 
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Subscription amount must be a positive number greater than zero' });
+    }
+
+    // Verify account belongs strictly to authenticated user
+    const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    if (!userAcc) {
+      return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
+    }
+
     const id = `sub_${userId}_${Date.now()}`;
     const now = new Date().toISOString();
 
@@ -50,7 +61,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       id,
       userId,
       name,
-      Number(amount),
+      numAmount,
       billingCycle,
       nextBillingDate,
       category || 'entertainment',
@@ -78,6 +89,21 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     }
 
     const { name, amount, billingCycle, nextBillingDate, category, accountId, status, icon } = req.body;
+
+    if (amount !== undefined) {
+      const numAmount = Number(amount);
+      if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: 'Subscription amount must be a positive number greater than zero' });
+      }
+    }
+
+    if (accountId && accountId !== existing.account_id) {
+      const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+      if (!userAcc) {
+        return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
+      }
+    }
+
     const now = new Date().toISOString();
 
     db.prepare(`

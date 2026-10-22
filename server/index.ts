@@ -35,9 +35,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // CORS Middleware
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const DEFAULT_ALLOWED_ORIGIN = process.env.NODE_ENV === 'production'
+  ? 'https://money-vedass.vercel.app'
+  : '*';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || DEFAULT_ALLOWED_ORIGIN;
+
 app.use((req: Request, res: Response, next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  const origin = req.headers.origin as string | undefined;
+
+  // Allow production domain, preview branches on vercel, or explicit allowed origin
+  if (
+    ALLOWED_ORIGIN === '*' ||
+    !origin ||
+    origin === ALLOWED_ORIGIN ||
+    origin === 'https://money-vedass.vercel.app' ||
+    origin.endsWith('.vercel.app') ||
+    origin.startsWith('http://localhost:')
+  ) {
+    res.header('Access-Control-Allow-Origin', origin || ALLOWED_ORIGIN);
+  } else {
+    res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  }
+
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   if (req.method === 'OPTIONS') {
