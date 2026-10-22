@@ -27,11 +27,11 @@ import { SubscriptionsPage } from './pages/SubscriptionsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { isSearchModalOpen, closeSearchModal } = useFinance();
 
   // Primary top-level view state: 'landing' | 'auth' | 'app'
-  const [viewMode, setViewMode] = useState<'app' | 'landing' | 'auth'>('auth');
+  const [viewMode, setViewMode] = useState<'app' | 'landing' | 'auth'>('app');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   // Internal app route
@@ -43,7 +43,19 @@ function AppContent() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
-  // If user explicitly switched to landing or auth
+  // If session is being verified on page refresh, show clean loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-sm font-medium text-slate-300">Loading your financial records...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If user explicitly switched to landing
   if (viewMode === 'landing') {
     return (
       <LandingPage
@@ -60,7 +72,8 @@ function AppContent() {
     );
   }
 
-  if (viewMode === 'auth' || !isAuthenticated) {
+  // If unauthenticated or explicitly navigating to auth
+  if (!isAuthenticated || viewMode === 'auth') {
     return (
       <AuthPage
         initialMode={authMode}

@@ -98,7 +98,11 @@ export const financeService = {
       const user = await apiRequest<UserProfile>('/user/profile');
       saveStorage(STORAGE_KEYS.USER, user);
       return user;
-    } catch (e) {
+    } catch (e: any) {
+      if (!getAuthToken()) {
+        // Token was invalid / expired / cleared by 401
+        throw e;
+      }
       console.warn('Backend unavailable, using cached profile:', e);
       return loadStorage(STORAGE_KEYS.USER, INITIAL_USER);
     }
