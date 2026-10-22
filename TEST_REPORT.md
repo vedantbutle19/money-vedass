@@ -2,8 +2,8 @@
 **Project:** Finora Financial Record Management System  
 **Test Framework:** Node.js v24 Native Test Runner (`node:test`, `node:assert`, `tsx`)  
 **Execution Date:** October 2026  
-**Total Tests:** 30  
-**Passed:** 30  
+**Total Tests:** 33  
+**Passed:** 33  
 **Failed:** 0  
 **Skipped:** 0  
 **Total Execution Time:** ~1.45 seconds  
@@ -17,11 +17,11 @@ The test suite runs against an isolated, process-specific temporary SQLite test 
 
 | Test Suite | File | Tests | Passed | Failed | Duration |
 |---|---|---|---|---|---|
-| **Authentication & Security** | `tests/auth.test.ts` | 10 | 10 | 0 | ~602 ms |
+| **Authentication & Security** | `tests/auth.test.ts` | 11 | 11 | 0 | ~602 ms |
 | **Transactions, Calculations & Integrity** | `tests/transactions_and_calculations.test.ts` | 6 | 6 | 0 | ~362 ms |
-| **Security, IDOR & Feature Suite** | `tests/security_and_features.test.ts` | 10 | 10 | 0 | ~358 ms |
+| **Security, IDOR & Feature Suite** | `tests/security_and_features.test.ts` | 12 | 12 | 0 | ~358 ms |
 | **Frontend Math & Formatting Logic** | `tests/frontend_calculations.test.ts` | 4 | 4 | 0 | ~38 ms |
-| **Total** | | **30** | **30** | **0** | **~1.45 s** |
+| **Total** | | **33** | **33** | **0** | **~1.45 s** |
 
 ---
 
@@ -48,6 +48,8 @@ The test suite runs against an isolated, process-specific temporary SQLite test 
   - Verifies valid OTP resets user password, updates password hash, and deletes all existing sessions for that user.
 - `✔ POST /api/auth/logout - Invalidates session token`
   - Verifies token removal from `sessions` table upon logout.
+- `✔ POST /api/auth/send-otp - Rejects phone injection and protects accounts without registered phone`
+  - Verifies unauthenticated attackers cannot bind an arbitrary mobile number to an account that has no phone registered.
 
 ### Suite 2: Transactions, Calculations & Integrity (`tests/transactions_and_calculations.test.ts`)
 - `✔ Validation: Rejects negative, zero, or NaN transaction amounts`
@@ -89,6 +91,10 @@ The test suite runs against an isolated, process-specific temporary SQLite test 
   - Verifies toggling recurring transaction status between `active` and `paused`.
 - `✔ Feature: Financial Health score calculation endpoint`
   - Verifies `GET /api/financial-health` returns valid composite score, tier (`critical`, `needs_improvement`, `good`, `excellent`), and breakdown metrics.
+- `✔ System Category Protection: Authenticated user cannot overwrite core categories`
+  - Verifies HTTP 403 Forbidden when an authenticated user attempts to mutate core categories (e.g. `salary`, `housing`).
+- `✔ IDOR Protection: User A cannot bind User B account to subscriptions or recurring schedules`
+  - Verifies HTTP 400 Bad Request when attempting to associate an account belonging to another user.
 
 ### Suite 4: Frontend Math & Formatting Logic (`tests/frontend_calculations.test.ts`)
 - `✔ formatCurrency: Formats INR with Indian numbering system and currency symbol`

@@ -65,6 +65,24 @@ The codebase has a clean modular design and user-scoped data filtering in many p
 - **Impact:** In production, detailed database or file system error strings leak server architecture details to callers.
 - **Remediation:** Sanitize 500 error responses in production (`Internal Server Error`), logging full errors to server logs only.
 
+### [CRITICAL] SEC-07: Account Takeover via Phone Injection in Unauthenticated Password Reset
+- **Location:** `server/routes/auth.ts` (lines 204–216)
+- **Vulnerability:** If an account was registered without a phone number, calling `POST /api/auth/send-otp` with an arbitrary phone number automatically bound that phone number to the victim's account and dispatched the reset OTP to the caller.
+- **Impact:** Complete account hijacking for any user without a saved phone.
+- **Remediation:** Strictly verify that the account has a pre-existing verified mobile number. Reject reset OTP generation if no mobile number is registered. Never mutate user records during an unauthenticated password-reset request.
+
+### [HIGH] SEC-08: Insecure Direct Object Reference (IDOR) on Subscriptions & Recurring Schedules
+- **Location:** `server/routes/subscriptions.ts` and `server/routes/recurring.ts`
+- **Vulnerability:** Endpoints accepted `accountId` without validating that the referenced account belonged to the authenticated user (`WHERE id = ? AND user_id = ?`).
+- **Impact:** Cross-user data reference. User A could link User B's accounts to their own subscriptions or recurring transactions.
+- **Remediation:** Enforce strict account ownership verification against `req.user.id` on creation and mutation.
+
+### [MEDIUM] SEC-09: Global System Category Overwrite Vulnerability
+- **Location:** `server/routes/categories.ts`
+- **Vulnerability:** `POST /api/categories` allowed any authenticated user to perform `INSERT OR REPLACE` on standard system categories (`salary`, `housing`, `food`, etc.).
+- **Impact:** Category tampering and UI disruption for all platform users.
+- **Remediation:** Protected system categories using an immutable identifier allowlist, returning `403 Forbidden` if modification is attempted.
+
 ---
 
 ## 3. Financial Calculations & Data Integrity Findings
