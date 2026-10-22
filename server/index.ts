@@ -93,7 +93,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/financial-health', healthRouter);
 app.use('/api/backup', backupRouter);
 
-// Serve frontend in production or if dist folder exists
+// Serve frontend in production if dist folder exists, or provide API status
 const distPath = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
@@ -102,6 +102,17 @@ if (fs.existsSync(distPath)) {
       return next();
     }
     res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // If running purely as API backend (e.g. on Render)
+  app.get('/', (req: Request, res: Response) => {
+    res.json({
+      name: 'Money Vedass / Finora API Server',
+      status: 'online',
+      message: 'The backend server is running and database is connected.',
+      healthEndpoint: '/api/health',
+      frontend: 'Deployed on Vercel',
+    });
   });
 }
 
