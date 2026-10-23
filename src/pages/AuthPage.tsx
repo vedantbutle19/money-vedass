@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Smartphone,
   User,
+  UserPlus,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -293,10 +294,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         {error && (
           <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs border border-rose-200 dark:border-rose-900/50 flex items-start gap-2.5">
             <ShieldAlert size={16} className="shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <span>{error}</span>
-              {(mode === 'login' || mode === 'forgot') && error.toLowerCase().includes('register') && (
-                <div className="mt-2">
+            <div className="flex-1 space-y-2">
+              <span className="font-medium leading-relaxed block">{error}</span>
+              {(mode === 'login' || mode === 'forgot') &&
+                (error.toLowerCase().includes('no user account') ||
+                  error.toLowerCase().includes('create an account') ||
+                  error.toLowerCase().includes('no account') ||
+                  error.toLowerCase().includes('register') ||
+                  error.toLowerCase().includes('not found')) && (
+                <div className="pt-2 border-t border-rose-200/70 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">New user or no account?</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -306,9 +313,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setOtpStep('request');
                       setMode('signup');
                     }}
-                    className="font-bold underline text-rose-700 dark:text-rose-300 hover:text-rose-900"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
                   >
-                    Click here to Register Now →
+                    <UserPlus size={13} />
+                    <span>Create an Account →</span>
                   </button>
                 </div>
               )}

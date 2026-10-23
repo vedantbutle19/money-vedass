@@ -130,7 +130,8 @@ router.post('/login', loginLimiter, async (req, res: Response) => {
     const user = await db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
-        error: 'No account registered with this email. Please register first to use Money Vedass.',
+        error: 'No user account found. Please create an account to use Money Vedass.',
+        userNotFound: true,
       });
     }
 
@@ -189,7 +190,8 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
     const user = await db.prepare('SELECT id, name, email, phone FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
-        error: 'No account registered with this email address. Please register first.',
+        error: 'No user account found with this email. Please create an account to use Money Vedass.',
+        userNotFound: true,
       });
     }
 
@@ -292,7 +294,8 @@ router.post('/reset-password', otpResetLimiter, async (req, res: Response) => {
     const user = await db.prepare('SELECT id, email FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
-        error: 'No account registered with this email address. Please register first.',
+        error: 'No user account found with this email. Please create an account to use Money Vedass.',
+        userNotFound: true,
       });
     }
 

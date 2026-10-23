@@ -46,6 +46,16 @@ describe('Authentication & Security Suite', () => {
     assert.match(res.data.error, /already registered/);
   });
 
+  test('POST /api/auth/login - Rejects non-existent user with "No user account found. Please create an account"', async () => {
+    const res = await apiRequest('POST', '/api/auth/login', {
+      email: 'nonexistent_user@example.com',
+      password: 'SomePassword123!',
+    });
+    assert.strictEqual(res.status, 404);
+    assert.match(res.data.error, /No user account found.*create an account/i);
+    assert.strictEqual(res.data.userNotFound, true);
+  });
+
   test('POST /api/auth/login - Rejects invalid password', async () => {
     const res = await apiRequest('POST', '/api/auth/login', {
       email: 'alice@example.com',
