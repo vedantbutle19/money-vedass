@@ -31,7 +31,8 @@ function AppContent() {
   const { isSearchModalOpen, closeSearchModal } = useFinance();
 
   // Primary top-level view state: 'landing' | 'auth' | 'app'
-  const [viewMode, setViewMode] = useState<'app' | 'landing' | 'auth'>('app');
+  // Always starts with landing page as default
+  const [viewMode, setViewMode] = useState<'landing' | 'auth' | 'app'>('landing');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   // Internal app route
@@ -42,6 +43,13 @@ function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+
+  // Return to landing page if user logs out while inside the app
+  React.useEffect(() => {
+    if (!isAuthenticated && viewMode === 'app') {
+      setViewMode('landing');
+    }
+  }, [isAuthenticated, viewMode]);
 
   // If session is being verified on page refresh, show clean loading state
   if (isLoading) {
@@ -55,14 +63,26 @@ function AppContent() {
     );
   }
 
-  // If user explicitly switched to landing
+  // 1. Landing page view (default entry point)
   if (viewMode === 'landing') {
     return (
       <LandingPage
-        onEnterApp={() => setViewMode('app')}
+        isAuthenticated={isAuthenticated}
+        onEnterApp={() => {
+          if (isAuthenticated) {
+            setViewMode('app');
+          } else {
+            setAuthMode('login');
+            setViewMode('auth');
+          }
+        }}
         onOpenLogin={() => {
-          setAuthMode('login');
-          setViewMode('auth');
+          if (isAuthenticated) {
+            setViewMode('app');
+          } else {
+            setAuthMode('login');
+            setViewMode('auth');
+          }
         }}
         onOpenSignup={() => {
           setAuthMode('signup');
@@ -72,8 +92,8 @@ function AppContent() {
     );
   }
 
-  // If unauthenticated or explicitly navigating to auth
-  if (!isAuthenticated || viewMode === 'auth') {
+  // 2. Auth view (login / signup / forgot password)
+  if (viewMode === 'auth' || !isAuthenticated) {
     return (
       <AuthPage
         initialMode={authMode}

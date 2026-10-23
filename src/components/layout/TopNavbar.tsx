@@ -1,6 +1,7 @@
 import {
   Bell,
   ChevronDown,
+  Globe,
   LogOut,
   Menu,
   Moon,
@@ -195,6 +196,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <Shield size={14} />
                   <span>Security</span>
                 </button>
+                {onViewLanding && (
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onViewLanding();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-colors"
+                  >
+                    <Globe size={14} />
+                    <span>Home & Landing Page</span>
+                  </button>
+                )}
               </div>
 
               <div className="pt-1 border-t border-slate-100 dark:border-slate-800">

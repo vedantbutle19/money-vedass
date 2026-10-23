@@ -28,11 +28,14 @@ interface LandingPageProps {
   onEnterApp: () => void;
   onOpenLogin: () => void;
   onOpenSignup: () => void;
+  isAuthenticated?: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
+  onEnterApp,
   onOpenLogin,
   onOpenSignup,
+  isAuthenticated = false,
 }) => {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-900">
@@ -56,18 +59,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </nav>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onOpenLogin}
-            className="px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-          >
-            Sign in
-          </button>
-          <button
-            onClick={onOpenSignup}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
-          >
-            Register Free Account
-          </button>
+          {isAuthenticated ? (
+            <button
+              onClick={onEnterApp}
+              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Go to Dashboard</span>
+              <ArrowRight size={14} />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onOpenLogin}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                Sign in
+              </button>
+              <button
+                onClick={onOpenSignup}
+                className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+              >
+                Register Free Account
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -87,19 +102,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </p>
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            onClick={onOpenSignup}
-            className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <span>Register Your Free Account</span>
-            <ArrowRight size={16} />
-          </button>
-          <button
-            onClick={onOpenLogin}
-            className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all cursor-pointer"
-          >
-            Sign in to Existing Account
-          </button>
+          {isAuthenticated ? (
+            <button
+              onClick={onEnterApp}
+              className="w-full sm:w-auto px-7 py-3.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>Enter Your Dashboard</span>
+              <ArrowRight size={16} />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onOpenSignup}
+                className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Register Your Free Account</span>
+                <ArrowRight size={16} />
+              </button>
+              <button
+                onClick={onOpenLogin}
+                className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all cursor-pointer"
+              >
+                Sign in to Existing Account
+              </button>
+            </>
+          )}
         </div>
       </section>
 
@@ -499,10 +526,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span>Registration is mandatory to ensure every user has a private, isolated record.</span>
             </div>
             <button
-              onClick={onOpenSignup}
+              onClick={isAuthenticated ? onEnterApp : onOpenSignup}
               className="w-full sm:w-auto px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold rounded-xl text-xs hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>Create Your Free Account Now</span>
+              <span>{isAuthenticated ? 'Enter Your Dashboard' : 'Create Your Free Account Now'}</span>
               <ArrowRight size={14} />
             </button>
           </div>
