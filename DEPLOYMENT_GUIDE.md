@@ -14,40 +14,26 @@
 
 ---
 
-## 2. The Critical Database Persistence Requirement on Vercel
+## 2. Permanent Database Persistence (Render Free Tier + Turso Cloud)
 
-> [!CAUTION]
-> **Vercel Serverless File System Ephemeral Nature:**
-> Vercel executes serverless functions in ephemeral containers with a read-only filesystem (except `/tmp`). Files created in `/tmp` are temporary and **discarded between function instances and cold starts**.
+> [!IMPORTANT]
+> **Why Render Free Tier resets data:**
+> On Render's Free tier, services spin down after 15 minutes of inactivity, and the container disk is ephemeral. When the service wakes up, local disk files are reset.
+>
+> **The Solution (Now Integrated in `@libsql/client`):**
+> Finora now natively supports **Turso (LibSQL Cloud)**. Turso provides a **100% free forever** SQLite-compatible cloud database (up to 9 GB storage, 500 databases).
 > 
-> Therefore, **a local SQLite file (`data/finora.db`) CANNOT be used as a durable production database directly inside a Vercel Serverless Function.**
+> Simply add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to your Render environment variables, and all accounts, sessions, and transactions persist permanently across restarts and sleep cycles!
 
-To achieve durable, production-grade persistence, choose one of the following architectural strategies:
-
-### Option A (Recommended for Vercel Serverless): Turso (libSQL / SQLite over HTTPS)
-- **Why it fits:** Turso is a serverless-native SQLite service that connects over HTTPS / WebSockets.
-- **Benefits:**
-  - 100% compatible with SQLite schema, indexes, and queries.
-  - Generous free tier (up to 9GB storage, 500 databases).
-  - No database server management.
-- **Setup:**
-  1. Create a database on [Turso.tech](https://turso.tech/):
-     ```bash
-     turso db create finora-prod
-     turso db tokens create finora-prod
-     ```
-  2. Set environment variables on Vercel:
-     - `TURSO_DATABASE_URL=libsql://finora-prod-<username>.turso.io`
-     - `TURSO_AUTH_TOKEN=your-turso-token`
-
-### Option B: Managed PostgreSQL (Neon / Supabase / Vercel Postgres)
-- **Why it fits:** Native Vercel integration with serverless connection pooling.
-- **Setup:**
-  1. Provision a Neon or Supabase database.
-  2. Run the table schema initialization script.
-  3. Set `DATABASE_URL` in Vercel project environment variables.
-
-### Option C (Best for Keeping Single SQLite File): Hybrid Architecture
+### 2-Minute Turso Configuration Steps:
+1. Create a free account at [turso.tech](https://turso.tech).
+2. Click **Create Database** (e.g. `money-vedass`) and choose your region (e.g. `Mumbai` or `Singapore`).
+3. Copy your database URL (`libsql://money-vedass-...turso.io`) and click **Generate Token**.
+4. In your **Render Dashboard** -> Service `money-vedass` -> **Environment**, add:
+   - `TURSO_DATABASE_URL`: `libsql://money-vedass-...turso.io`
+   - `TURSO_AUTH_TOKEN`: `your-turso-auth-token`
+5. Click **Save Changes**. Render will redeploy automatically.
+6. Verify persistence at `https://money-vedass.onrender.com/api/health` — you will see `"storage": "turso_cloud"`.
 - **Frontend:** Hosted on Vercel (blazing-fast global CDN for React SPA).
 - **Backend:** Hosted on a Node.js persistent host such as **Render**, **Railway**, or **Fly.io** with an attached persistent volume mounted at `/data`.
 - **Setup:**
