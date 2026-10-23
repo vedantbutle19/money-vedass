@@ -125,7 +125,7 @@ describe('Authentication & Security Suite', () => {
     assert.match(att5.data.error, /Maximum attempts exceeded/);
 
     // Even if correct OTP is used now, it is invalidated
-    const activeOtp = db.prepare('SELECT otp_code FROM otp_codes WHERE LOWER(email) = ? ORDER BY created_at DESC LIMIT 1').get('alice@example.com') as any;
+    const activeOtp = await db.prepare('SELECT otp_code FROM otp_codes WHERE LOWER(email) = ? ORDER BY created_at DESC LIMIT 1').get('alice@example.com') as any;
     const attAfterLockout = await apiRequest('POST', '/api/auth/reset-password', {
       email: 'alice@example.com',
       otp: activeOtp.otp_code,
@@ -148,7 +148,7 @@ describe('Authentication & Security Suite', () => {
       phone: '9876543210',
     });
 
-    const otpRow = db.prepare('SELECT otp_code FROM otp_codes WHERE LOWER(email) = ? AND used = 0 ORDER BY created_at DESC LIMIT 1').get('alice@example.com') as any;
+    const otpRow = await db.prepare('SELECT otp_code FROM otp_codes WHERE LOWER(email) = ? AND used = 0 ORDER BY created_at DESC LIMIT 1').get('alice@example.com') as any;
     assert.ok(otpRow?.otp_code);
 
     // Reset password with correct OTP
@@ -204,7 +204,7 @@ describe('Authentication & Security Suite', () => {
     assert.match(attackRes.data.error, /does not have a registered mobile number/);
 
     // Verify Bob's phone was NOT modified in the database
-    const bob = db.prepare('SELECT phone FROM users WHERE email = ?').get('bob_nophone@example.com') as any;
+    const bob = await db.prepare('SELECT phone FROM users WHERE email = ?').get('bob_nophone@example.com') as any;
     assert.strictEqual(bob.phone, '');
   });
 });

@@ -22,10 +22,10 @@ function formatAccount(row: any) {
 }
 
 // GET /api/accounts - Only returns current user's accounts
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const rows = db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at ASC').all(userId);
+    const rows = await db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at ASC').all(userId);
     res.json(rows.map(formatAccount));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -33,10 +33,10 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // GET /api/accounts/:id - Only returns if belongs to current user
-router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const row = db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const row = await db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!row) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -47,7 +47,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/accounts - Insert tied to current user's ID
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { name, type, balance, currency, accountNumberMasked, institution, color } = req.body;
@@ -59,7 +59,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const now = new Date().toISOString();
     const cleanBalance = Math.round((Number(balance || 0) + Number.EPSILON) * 100) / 100;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO accounts (id, user_id, name, type, balance, currency, account_number_masked, institution, color, updated_at, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -76,7 +76,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       now
     );
 
-    const created = db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatAccount(created));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -84,10 +84,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/accounts/:id - Update only if belongs to current user
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -96,7 +96,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     const now = new Date().toISOString();
     const cleanBalance = balance !== undefined ? Math.round((Number(balance) + Number.EPSILON) * 100) / 100 : existing.balance;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE accounts
       SET name = ?, type = ?, balance = ?, currency = ?, account_number_masked = ?, institution = ?, color = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
@@ -113,7 +113,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       userId
     );
 
-    const updated = db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatAccount(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -121,16 +121,16 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/accounts/:id - Delete only if belongs to current user and has no linked transactions
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const existing = await db.prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Account not found' });
     }
 
     // Check if any transactions reference this account
-    const txCheck = db.prepare(`
+    const txCheck = await db.prepare(`
       SELECT COUNT(*) as count FROM transactions
       WHERE (account_id = ? OR to_account_id = ?) AND user_id = ?
     `).get(req.params.id, req.params.id, userId) as { count: number };
@@ -141,7 +141,7 @@ router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    db.prepare('DELETE FROM accounts WHERE id = ? AND user_id = ?').run(req.params.id, userId);
+    await db.prepare('DELETE FROM accounts WHERE id = ? AND user_id = ?').run(req.params.id, userId);
     res.json({ success: true, message: 'Account deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

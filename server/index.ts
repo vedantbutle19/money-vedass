@@ -16,7 +16,9 @@ import healthRouter from './routes/health.ts';
 import backupRouter from './routes/backup.ts';
 
 // Initialize SQLite schema and initial seed data
-initDatabase();
+initDatabase().catch((err) => {
+  console.error('Failed to initialize database schema:', err);
+});
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -80,17 +82,18 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', async (req: Request, res: Response) => {
   try {
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    const txCount = db.prepare('SELECT COUNT(*) as count FROM transactions').get() as { count: number };
+    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const txCount = await db.prepare('SELECT COUNT(*) as count FROM transactions').get() as { count: number };
     res.json({
       status: 'healthy',
       database: 'connected',
+      storage: process.env.TURSO_DATABASE_URL ? 'turso_cloud' : 'local_sqlite',
       timestamp: new Date().toISOString(),
       stats: {
-        users: userCount.count,
-        transactions: txCount.count,
+        users: userCount ? userCount.count : 0,
+        transactions: txCount ? txCount.count : 0,
       },
     });
   } catch (err: any) {
@@ -151,7 +154,8 @@ let server: any = null;
 if (process.env.NODE_ENV !== 'test') {
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Finora Backend Server running on http://localhost:${PORT}`);
-    console.log(`📁 Persistent SQLite database initialized at data/finora.db`);
+    const storageType = process.env.TURSO_DATABASE_URL ? 'Turso Cloud (LibSQL)' : 'Local SQLite';
+    console.log(`📁 Database configured: ${storageType}`);
   });
 
   // Graceful shutdown

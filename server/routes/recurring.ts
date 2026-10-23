@@ -22,10 +22,10 @@ function formatRecurring(row: any) {
 }
 
 // GET /api/recurring
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const rows = db.prepare('SELECT * FROM recurring_transactions WHERE user_id = ? ORDER BY next_run_date ASC').all(userId);
+    const rows = await db.prepare('SELECT * FROM recurring_transactions WHERE user_id = ? ORDER BY next_run_date ASC').all(userId);
     res.json(rows.map(formatRecurring));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -33,7 +33,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/recurring
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { name, amount, type, frequency, dayOfMonth = 1, category, accountId, status = 'active', nextRunDate } = req.body;
@@ -47,7 +47,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Verify account belongs strictly to authenticated user
-    const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    const userAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
     if (!userAcc) {
       return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
     }
@@ -56,7 +56,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const now = new Date().toISOString();
     const nextDate = nextRunDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO recurring_transactions (id, user_id, name, amount, type, frequency, day_of_month, category_id, account_id, status, next_run_date, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -75,7 +75,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       now
     );
 
-    const created = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatRecurring(created));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -83,10 +83,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/recurring/:id
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Recurring transaction not found' });
     }
@@ -101,7 +101,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     }
 
     if (accountId && accountId !== existing.account_id) {
-      const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+      const userAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
       if (!userAcc) {
         return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
       }
@@ -109,7 +109,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE recurring_transactions
       SET name = ?, amount = ?, type = ?, frequency = ?, day_of_month = ?, category_id = ?, account_id = ?, status = ?, next_run_date = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
@@ -128,7 +128,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       userId
     );
 
-    const updated = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatRecurring(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -136,10 +136,10 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PATCH /api/recurring/:id/toggle - Toggle active / paused
-router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/toggle', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Recurring transaction not found' });
     }
@@ -147,9 +147,9 @@ router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
     const newStatus = existing.status === 'active' ? 'paused' : 'active';
     const now = new Date().toISOString();
 
-    db.prepare('UPDATE recurring_transactions SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(newStatus, now, req.params.id, userId);
+    await db.prepare('UPDATE recurring_transactions SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(newStatus, now, req.params.id, userId);
 
-    const updated = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatRecurring(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -157,15 +157,15 @@ router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/recurring/:id
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const existing = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Recurring transaction not found' });
     }
 
-    db.prepare('DELETE FROM recurring_transactions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
+    await db.prepare('DELETE FROM recurring_transactions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
     res.json({ success: true, message: 'Recurring transaction deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

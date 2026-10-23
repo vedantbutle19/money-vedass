@@ -21,10 +21,10 @@ function formatSubscription(row: any) {
 }
 
 // GET /api/subscriptions
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const rows = db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY next_billing_date ASC').all(userId);
+    const rows = await db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY next_billing_date ASC').all(userId);
     res.json(rows.map(formatSubscription));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -32,7 +32,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/subscriptions
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { name, amount, billingCycle, nextBillingDate, category, accountId, status = 'active', icon = 'Tv' } = req.body;
@@ -46,7 +46,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Verify account belongs strictly to authenticated user
-    const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    const userAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
     if (!userAcc) {
       return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
     }
@@ -54,7 +54,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const id = `sub_${userId}_${Date.now()}`;
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO subscriptions (id, user_id, name, amount, billing_cycle, next_billing_date, category_id, account_id, status, icon, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -72,7 +72,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       now
     );
 
-    const created = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatSubscription(created));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -80,10 +80,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/subscriptions/:id
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Subscription not found' });
     }
@@ -98,7 +98,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     }
 
     if (accountId && accountId !== existing.account_id) {
-      const userAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+      const userAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
       if (!userAcc) {
         return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
       }
@@ -106,7 +106,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE subscriptions
       SET name = ?, amount = ?, billing_cycle = ?, next_billing_date = ?, category_id = ?, account_id = ?, status = ?, icon = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
@@ -124,7 +124,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       userId
     );
 
-    const updated = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatSubscription(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -132,10 +132,10 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PATCH /api/subscriptions/:id/toggle - Toggle active / paused
-router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/toggle', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Subscription not found' });
     }
@@ -143,9 +143,9 @@ router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
     const newStatus = existing.status === 'active' ? 'paused' : 'active';
     const now = new Date().toISOString();
 
-    db.prepare('UPDATE subscriptions SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(newStatus, now, req.params.id, userId);
+    await db.prepare('UPDATE subscriptions SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(newStatus, now, req.params.id, userId);
 
-    const updated = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatSubscription(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -153,15 +153,15 @@ router.patch('/:id/toggle', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/subscriptions/:id
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const existing = await db.prepare('SELECT * FROM subscriptions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    db.prepare('DELETE FROM subscriptions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
+    await db.prepare('DELETE FROM subscriptions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
     res.json({ success: true, message: 'Subscription deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -5,9 +5,9 @@ import { requireAuth } from '../middleware/auth.ts';
 const router = Router();
 
 // GET /api/categories
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const rows = db.prepare('SELECT * FROM categories').all() as any[];
+    const rows = await db.prepare('SELECT * FROM categories').all() as any[];
     res.json(
       rows.map((r) => ({
         id: r.id,
@@ -38,7 +38,7 @@ const SYSTEM_CATEGORY_IDS = new Set([
 ]);
 
 // POST /api/categories - Requires authentication
-router.post('/', requireAuth, (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id, name, iconName, color, type } = req.body;
     if (!id || typeof id !== 'string' || !name || typeof name !== 'string') {
@@ -52,7 +52,7 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
 
     const cleanType = ['expense', 'income', 'both'].includes(type) ? type : 'expense';
 
-    db.prepare(`
+    await db.prepare(`
       INSERT OR REPLACE INTO categories (id, name, icon_name, color, type)
       VALUES (?, ?, ?, ?, ?)
     `).run(cleanId, name.trim(), iconName || 'Folder', color || '#6B7280', cleanType);

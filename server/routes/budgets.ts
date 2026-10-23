@@ -19,7 +19,7 @@ function formatBudget(row: any) {
 }
 
 // GET /api/budgets - Scoped to logged-in user
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { month, year } = req.query;
@@ -35,7 +35,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       params.push(Number(year));
     }
 
-    const rows = db.prepare(query).all(...params);
+    const rows = await db.prepare(query).all(...params);
     res.json(rows.map(formatBudget));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -43,7 +43,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/budgets - Tied to logged-in user with upsert & existing spend sync
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { categoryId, categoryName, limit, month = 10, year = 2026 } = req.body;
@@ -62,7 +62,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 
     // Calculate existing spent amount for this category in this month/year from ledger
     const monthPadded = String(numMonth).padStart(2, '0');
-    const existingSpentRow = db.prepare(`
+    const existingSpentRow = await db.prepare(`
       SELECT SUM(amount) as total FROM transactions
       WHERE user_id = ? AND category_id = ? AND type = 'expense'
         AND strftime('%Y-%m', date) = ?
@@ -70,29 +70,29 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const currentSpent = existingSpentRow && existingSpentRow.total ? Math.round(Number(existingSpentRow.total) * 100) / 100 : 0;
 
     // Check if budget allocation already exists for this month/year
-    const existingBudget = db.prepare(`
+    const existingBudget = await db.prepare(`
       SELECT id FROM budgets WHERE user_id = ? AND category_id = ? AND month = ? AND year = ?
     `).get(userId, categoryId, numMonth, numYear) as any;
 
     if (existingBudget) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE budgets
         SET limit_amount = ?, category_name = ?, spent = ?, updated_at = ?
         WHERE id = ? AND user_id = ?
       `).run(cleanLimit, categoryName || categoryId, currentSpent, now, existingBudget.id, userId);
 
-      const updated = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(existingBudget.id, userId);
+      const updated = await db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(existingBudget.id, userId);
       return res.status(200).json(formatBudget(updated));
     }
 
     const id = `b_${userId}_${categoryId}_${numYear}_${numMonth}`;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO budgets (id, user_id, category_id, category_name, month, year, limit_amount, spent, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, userId, categoryId, categoryName || categoryId, numMonth, numYear, cleanLimit, currentSpent, now, now);
 
-    const created = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatBudget(created));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -100,10 +100,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/budgets/:id - Scoped to logged-in user
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Budget not found' });
     }
@@ -114,13 +114,13 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     const newLimit = limit !== undefined ? Number(limit) : existing.limit_amount;
     const newSpent = spent !== undefined ? Number(spent) : existing.spent;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE budgets
       SET limit_amount = ?, spent = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
     `).run(newLimit, newSpent, now, req.params.id, userId);
 
-    const updated = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatBudget(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -128,15 +128,15 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/budgets/:id - Scoped to logged-in user
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const existing = await db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Budget not found' });
     }
 
-    db.prepare('DELETE FROM budgets WHERE id = ? AND user_id = ?').run(req.params.id, userId);
+    await db.prepare('DELETE FROM budgets WHERE id = ? AND user_id = ?').run(req.params.id, userId);
     res.json({ success: true, message: 'Budget deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

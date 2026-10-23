@@ -17,7 +17,7 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
@@ -27,7 +27,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     }
 
     // Look up active session
-    const session = db.prepare(`
+    const session = await db.prepare(`
       SELECT 
         s.token,
         s.user_id,
@@ -52,7 +52,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
 
     // Check expiration
     if (new Date(session.expires_at) < new Date()) {
-      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
       return res.status(401).json({ error: 'Session expired. Please sign in again.' });
     }
 

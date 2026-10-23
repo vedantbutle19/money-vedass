@@ -34,10 +34,10 @@ export function verifyPassword(password: string, storedHash?: string): boolean {
 }
 
 // Helper to create a 30-day session token
-function createSession(userId: string, email: string): string {
+async function createSession(userId: string, email: string): Promise<string> {
   const token = 'tok_' + crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO sessions (token, user_id, email, expires_at)
     VALUES (?, ?, ?, ?)
   `).run(token, userId, email, expiresAt);
@@ -45,7 +45,7 @@ function createSession(userId: string, email: string): string {
 }
 
 // POST /api/auth/signup - Register new user first
-router.post('/signup', signupLimiter, (req, res: Response) => {
+router.post('/signup', signupLimiter, async (req, res: Response) => {
   try {
     const { name, email, phone, password } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -63,7 +63,7 @@ router.post('/signup', signupLimiter, (req, res: Response) => {
     const cleanPhone = typeof phone === 'string' ? phone.replace(/\s+/g, '').trim() : '';
 
     // Check if user already exists
-    const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+    const existing = await db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (existing) {
       return res.status(400).json({
         error: 'An account with this email is already registered. Please sign in instead.',
@@ -74,55 +74,47 @@ router.post('/signup', signupLimiter, (req, res: Response) => {
     const today = new Date().toISOString().split('T')[0];
     const passwordHash = hashPassword(password);
 
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      // 1. Insert User
-      db.prepare(`
-        INSERT INTO users (id, name, email, phone, password_hash, currency, currency_symbol, date_format, monthly_income_baseline, joined_date)
-        VALUES (?, ?, ?, ?, ?, 'INR', '₹', 'DD/MM/YYYY', 0, ?)
-      `).run(userId, cleanName, cleanEmail, cleanPhone, passwordHash, today);
+    // 1. Insert User
+    await db.prepare(`
+      INSERT INTO users (id, name, email, phone, password_hash, currency, currency_symbol, date_format, monthly_income_baseline, joined_date)
+      VALUES (?, ?, ?, ?, ?, 'INR', '₹', 'DD/MM/YYYY', 0, ?)
+    `).run(userId, cleanName, cleanEmail, cleanPhone, passwordHash, today);
 
-      // 2. Provision initial clean accounts for this specific user
-      createInitialUserAccounts(userId);
+    // 2. Provision initial clean accounts for this specific user
+    await createInitialUserAccounts(userId);
 
-      // 3. Create welcome notification
-      const notifId = `notif_${Date.now()}`;
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, title, message, type, timestamp, read)
-        VALUES (?, ?, 'Welcome to Money Vedass', 'Your private financial ledger is set up. All records are secured to your registered email.', 'info', 'Just now', 0)
-      `).run(notifId, userId);
+    // 3. Create welcome notification
+    const notifId = `notif_${Date.now()}`;
+    await db.prepare(`
+      INSERT INTO notifications (id, user_id, title, message, type, timestamp, read)
+      VALUES (?, ?, 'Welcome to Money Vedass', 'Your private financial ledger is set up. All records are secured to your registered email.', 'info', 'Just now', 0)
+    `).run(notifId, userId);
 
-      // 4. Create active session token
-      const token = createSession(userId, cleanEmail);
+    // 4. Create active session token
+    const token = await createSession(userId, cleanEmail);
 
-      db.exec('COMMIT;');
-
-      res.status(201).json({
-        success: true,
-        token,
-        user: {
-          id: userId,
-          name: cleanName,
-          email: cleanEmail,
-          phone: cleanPhone,
-          currency: 'INR',
-          currencySymbol: '₹',
-          dateFormat: 'DD/MM/YYYY',
-          monthlyIncomeBaseline: 0,
-          joinedDate: today,
-        },
-      });
-    } catch (err) {
-      db.exec('ROLLBACK;');
-      throw err;
-    }
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: userId,
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        currency: 'INR',
+        currencySymbol: '₹',
+        dateFormat: 'DD/MM/YYYY',
+        monthlyIncomeBaseline: 0,
+        joinedDate: today,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST /api/auth/login - Strict login (unknown users rejected)
-router.post('/login', loginLimiter, (req, res: Response) => {
+router.post('/login', loginLimiter, async (req, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -135,7 +127,7 @@ router.post('/login', loginLimiter, (req, res: Response) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Look up registered user
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+    const user = await db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
         error: 'No account registered with this email. Please register first to use Money Vedass.',
@@ -150,7 +142,7 @@ router.post('/login', loginLimiter, (req, res: Response) => {
     }
 
     // Issue session token
-    const token = createSession(user.id, user.email);
+    const token = await createSession(user.id, user.email);
 
     res.json({
       success: true,
@@ -194,7 +186,7 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
     const cleanPhone = phone.replace(/\s+/g, '').trim();
     const inputDigits = cleanPhone.replace(/\D/g, '').slice(-10);
 
-    const user = db.prepare('SELECT id, name, email, phone FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+    const user = await db.prepare('SELECT id, name, email, phone FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
         error: 'No account registered with this email address. Please register first.',
@@ -216,14 +208,14 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
     }
 
     // Invalidate any previous unused OTPs for this email
-    db.prepare('UPDATE otp_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(cleanEmail);
+    await db.prepare('UPDATE otp_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(cleanEmail);
 
     // Generate 6-digit cryptographically secure OTP
     const otpCode = crypto.randomInt(100000, 999999).toString();
     const otpId = `otp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO otp_codes (id, user_id, email, phone, otp_code, expires_at, used, attempts)
       VALUES (?, ?, ?, ?, ?, ?, 0, 0)
     `).run(otpId, user.id, cleanEmail, cleanPhone, otpCode, expiresAt);
@@ -281,7 +273,7 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
 });
 
 // POST /api/auth/reset-password - Verify SMS OTP and reset password for a registered email
-router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
+router.post('/reset-password', otpResetLimiter, async (req, res: Response) => {
   try {
     const { email, otp, newPassword } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -297,7 +289,7 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
 
-    const user = db.prepare('SELECT id, email FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+    const user = await db.prepare('SELECT id, email FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
         error: 'No account registered with this email address. Please register first.',
@@ -305,7 +297,7 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
     }
 
     // Verify latest active OTP for this email
-    const otpRecord = db.prepare(`
+    const otpRecord = await db.prepare(`
       SELECT * FROM otp_codes
       WHERE LOWER(email) = ? AND used = 0
       ORDER BY created_at DESC LIMIT 1
@@ -318,7 +310,7 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
     }
 
     if (new Date(otpRecord.expires_at) < new Date()) {
-      db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
+      await db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
       return res.status(400).json({
         error: 'SMS OTP has expired. Please request a new OTP.',
       });
@@ -326,7 +318,7 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
 
     // Check brute-force attempts on this OTP
     if ((otpRecord.attempts || 0) >= 5) {
-      db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
+      await db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
       return res.status(400).json({
         error: 'Too many failed attempts. This OTP has been invalidated. Please request a new OTP.',
       });
@@ -337,12 +329,12 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
       const newAttempts = (otpRecord.attempts || 0) + 1;
       const remaining = 5 - newAttempts;
       if (remaining <= 0) {
-        db.prepare('UPDATE otp_codes SET used = 1, attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
+        await db.prepare('UPDATE otp_codes SET used = 1, attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
         return res.status(400).json({
           error: 'Invalid SMS OTP code. Maximum attempts exceeded. Please request a new OTP.',
         });
       } else {
-        db.prepare('UPDATE otp_codes SET attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
+        await db.prepare('UPDATE otp_codes SET attempts = ? WHERE id = ?').run(newAttempts, otpRecord.id);
         return res.status(400).json({
           error: `Invalid SMS OTP code. You have ${remaining} attempt(s) remaining.`,
         });
@@ -351,21 +343,14 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
 
     // Mark OTP as used and update user password
     const passwordHash = hashPassword(newPassword);
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
-      db.prepare(`
-        UPDATE users
-        SET password_hash = ?, updated_at = datetime('now')
-        WHERE id = ?
-      `).run(passwordHash, user.id);
-      // Invalidate all active sessions for this user so they must log in with the new password
-      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
-      db.exec('COMMIT;');
-    } catch (e) {
-      db.exec('ROLLBACK;');
-      throw e;
-    }
+    await db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otpRecord.id);
+    await db.prepare(`
+      UPDATE users
+      SET password_hash = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(passwordHash, user.id);
+    // Invalidate all active sessions for this user so they must log in with the new password
+    await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
 
     res.json({
       success: true,
@@ -377,12 +362,12 @@ router.post('/reset-password', otpResetLimiter, (req, res: Response) => {
 });
 
 // POST /api/auth/logout - Invalidate session token
-router.post('/logout', (req, res: Response) => {
+router.post('/logout', async (req, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
     if (token) {
-      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     }
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (err: any) {
@@ -400,7 +385,7 @@ router.get('/profile', requireAuth, (req: AuthenticatedRequest, res: Response) =
 });
 
 // PUT /api/user/profile - Update currently authenticated user's profile
-router.put('/profile', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+router.put('/profile', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { name, email, phone, currency, currencySymbol, dateFormat, monthlyIncomeBaseline } = req.body;
     const currentUser = req.user!;
@@ -413,7 +398,7 @@ router.put('/profile', requireAuth, (req: AuthenticatedRequest, res: Response) =
     const updatedFormat = dateFormat ?? currentUser.dateFormat;
     const updatedIncome = monthlyIncomeBaseline !== undefined ? Number(monthlyIncomeBaseline) : currentUser.monthlyIncomeBaseline;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET name = ?, email = ?, phone = ?, currency = ?, currency_symbol = ?, date_format = ?, monthly_income_baseline = ?, updated_at = datetime('now')
       WHERE id = ?

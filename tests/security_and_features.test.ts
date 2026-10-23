@@ -89,7 +89,7 @@ describe('Security, IDOR Access Control & Features Suite', () => {
     assert.match(overwriteAttempt.data.error, /Standard system categories are protected/);
 
     // Verify system category remains intact
-    const salary = db.prepare('SELECT name FROM categories WHERE id = ?').get('salary') as any;
+    const salary = await db.prepare('SELECT name FROM categories WHERE id = ?').get('salary') as any;
     assert.strictEqual(salary.name, 'Salary & Professional');
   });
 

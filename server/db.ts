@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createClient, Client } from '@libsql/client';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -6,23 +6,112 @@ import path from 'node:path';
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const defaultDbPath = process.env.VERCEL ? path.join('/tmp', 'finora.db') : path.join(DATA_DIR, 'finora.db');
 const DB_PATH = process.env.DB_PATH || defaultDbPath;
-if (DB_PATH !== ':memory:' && !fs.existsSync(path.dirname(DB_PATH))) {
+
+if (DB_PATH !== ':memory:' && !process.env.TURSO_DATABASE_URL && !fs.existsSync(path.dirname(DB_PATH))) {
   try {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   } catch {}
 }
 
-export const db = new DatabaseSync(DB_PATH);
-
-// Setup database optimizations & constraints
-if (DB_PATH !== ':memory:') {
-  db.exec('PRAGMA journal_mode = WAL;');
+function getDatabaseUrl(): string {
+  if (process.env.TURSO_DATABASE_URL) {
+    return process.env.TURSO_DATABASE_URL;
+  }
+  if (DB_PATH === ':memory:') {
+    return ':memory:';
+  }
+  // Convert Windows backslashes for file: protocol
+  const normalized = DB_PATH.replace(/\\/g, '/');
+  return `file:${normalized}`;
 }
-db.exec('PRAGMA foreign_keys = ON;');
+
+let _client: Client | null = null;
+
+export function getClient(): Client {
+  if (!_client) {
+    _client = createClient({
+      url: getDatabaseUrl(),
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+  }
+  return _client;
+}
+
+function sanitizeArgs(args: any[]): any[] {
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return sanitizeArgs(args[0]);
+  }
+  return args.map((arg) => (arg === undefined ? null : arg));
+}
+
+export const db = {
+  get client(): Client {
+    return getClient();
+  },
+  prepare: (sql: string) => ({
+    get: async (...args: any[]) => {
+      const flatArgs = sanitizeArgs(args);
+      const res = await getClient().execute({ sql, args: flatArgs });
+      return (res.rows[0] as any) || undefined;
+    },
+    all: async (...args: any[]) => {
+      const flatArgs = sanitizeArgs(args);
+      const res = await getClient().execute({ sql, args: flatArgs });
+      return res.rows as any[];
+    },
+    run: async (...args: any[]) => {
+      const flatArgs = sanitizeArgs(args);
+      const res = await getClient().execute({ sql, args: flatArgs });
+      return {
+        changes: res.rowsAffected,
+        lastInsertRowid: res.lastInsertRowid,
+      };
+    },
+  }),
+  exec: async (sql: string) => {
+    // If the input is transaction control (BEGIN/COMMIT/ROLLBACK), skip it
+    // because individual statements are executed atomically over HTTP or within transactions.
+    const trimmed = sql.trim();
+    if (/^(BEGIN|COMMIT|ROLLBACK)(\s+TRANSACTION)?\s*;?$/i.test(trimmed)) {
+      return;
+    }
+    await getClient().executeMultiple(sql);
+  },
+  transaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+    const tx = await getClient().transaction('write');
+    try {
+      const res = await fn(tx);
+      await tx.commit();
+      return res;
+    } catch (err) {
+      try {
+        await tx.rollback();
+      } catch {}
+      throw err;
+    }
+  },
+  close: () => {
+    if (_client) {
+      try {
+        _client.close();
+      } catch {}
+      _client = null;
+    }
+  },
+};
 
 // Initialize tables
-export function initDatabase() {
-  db.exec(`
+export async function initDatabase() {
+  const c = getClient();
+
+  // Enable foreign keys if local
+  if (!process.env.TURSO_DATABASE_URL) {
+    try {
+      await c.execute('PRAGMA foreign_keys = ON;');
+    } catch {}
+  }
+
+  await c.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -188,30 +277,30 @@ export function initDatabase() {
   `);
 
   try {
-    db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'INR';");
+    await c.execute("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'INR';");
   } catch {
     // Column already exists
   }
 
   try {
-    db.exec("ALTER TABLE users ADD COLUMN phone TEXT;");
+    await c.execute("ALTER TABLE users ADD COLUMN phone TEXT;");
   } catch {
     // Column already exists
   }
 
   try {
-    db.exec("ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0;");
+    await c.execute("ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0;");
   } catch {
     // Column already exists
   }
 
-  seedInitialDataIfEmpty();
+  await seedInitialDataIfEmpty();
 }
 
 // Seed global shared categories only (users must register first)
-export function seedInitialDataIfEmpty() {
-  const catCheck = db.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
-  if (catCheck.count > 0) {
+export async function seedInitialDataIfEmpty() {
+  const catCheck = await db.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
+  if (catCheck && catCheck.count > 0) {
     return; // Already initialized
   }
 
@@ -230,14 +319,13 @@ export function seedInitialDataIfEmpty() {
     { id: 'transfer', name: 'Internal Transfer', iconName: 'ArrowRightLeft', color: '#64748B', type: 'both' },
     { id: 'other', name: 'Other Expenses', iconName: 'Layers', color: '#94A3B8', type: 'expense' },
   ];
-  const insertCat = db.prepare('INSERT INTO categories (id, name, icon_name, color, type) VALUES (?, ?, ?, ?, ?)');
   for (const c of categories) {
-    insertCat.run(c.id, c.name, c.iconName, c.color, c.type);
+    await db.prepare('INSERT INTO categories (id, name, icon_name, color, type) VALUES (?, ?, ?, ?, ?)').run(c.id, c.name, c.iconName, c.color, c.type);
   }
 }
 
 // Helper to provision clean initial accounts for a freshly registered user
-export function createInitialUserAccounts(userId: string) {
+export async function createInitialUserAccounts(userId: string) {
   const now = new Date().toISOString();
   const accounts = [
     { id: `acc_${userId}_primary`, name: 'Primary Bank Account', type: 'Bank', balance: 0, currency: 'INR', accountNumberMasked: '••0000', institution: 'Bank', color: '#004c8f' },
@@ -248,13 +336,13 @@ export function createInitialUserAccounts(userId: string) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const a of accounts) {
-    insertAcc.run(a.id, userId, a.name, a.type, a.balance, a.currency, a.accountNumberMasked, a.institution, a.color, now, now);
+    await insertAcc.run(a.id, userId, a.name, a.type, a.balance, a.currency, a.accountNumberMasked, a.institution, a.color, now, now);
   }
 }
 
 // Reset data completely to zero
-export function resetDatabase() {
-  db.exec(`
+export async function resetDatabase() {
+  await getClient().executeMultiple(`
     DELETE FROM transactions;
     DELETE FROM budgets;
     DELETE FROM goals;
@@ -266,5 +354,5 @@ export function resetDatabase() {
     DELETE FROM categories;
     DELETE FROM users;
   `);
-  seedInitialDataIfEmpty();
+  await seedInitialDataIfEmpty();
 }

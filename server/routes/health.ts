@@ -7,7 +7,7 @@ const router = Router();
 router.use(requireAuth);
 
 // GET /api/financial-health
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const now = new Date();
@@ -16,7 +16,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     const monthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
     // Get accounts strictly for this user
-    const accounts = db.prepare('SELECT * FROM accounts WHERE user_id = ?').all(userId) as any[];
+    const accounts = await db.prepare('SELECT * FROM accounts WHERE user_id = ?').all(userId) as any[];
     const liquidBalance = accounts
       .filter((a) => ['Bank', 'Cash', 'Wallet', 'checking', 'savings'].includes(a.type.toLowerCase()) && a.balance > 0)
       .reduce((sum, a) => sum + Number(a.balance), 0);
@@ -28,7 +28,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       .reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
 
     // Get monthly transactions strictly for this user
-    const transactions = db
+    const transactions = await db
       .prepare("SELECT * FROM transactions WHERE user_id = ? AND strftime('%Y-%m', date) = ?")
       .all(userId, monthStr) as any[];
 
@@ -49,7 +49,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     const savingsRateScore = monthlyIncome > 0 ? Math.min(100, Math.round((savingsRate / 40) * 100)) : 50;
 
     // Budgets performance strictly for this user
-    const budgets = db
+    const budgets = await db
       .prepare('SELECT * FROM budgets WHERE user_id = ? AND month = ? AND year = ?')
       .all(userId, currentMonth, currentYear) as any[];
 
@@ -98,18 +98,9 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       components: {
         savingsRate: { score: savingsRateScore, actual: Math.round(savingsRate), target: 30, unit: '%' },
         budgetAdherence: { score: budgetScore, actual: budgets.length > 0 ? overBudgetCnt : 0, target: 0, unit: 'over-budget' },
-        emergencyFund: { score: emergencyFundScore, actual: Number(emergencyMonths.toFixed(1)), target: 6, unit: 'months' },
-        debtToIncome: { score: debtScore, actual: Math.round(debtRatio), target: 20, unit: '%' },
+        emergencyFund: { score: emergencyFundScore, actual: Math.round(emergencyMonths * 10) / 10, target: 6, unit: 'months' },
+        debtToAsset: { score: debtScore, actual: Math.round(debtRatio), target: 20, unit: '%' },
       },
-      insights: [
-        monthlyIncome > 0
-          ? `You have a monthly income baseline of ₹${monthlyIncome.toLocaleString('en-IN')}.`
-          : 'Set up your monthly income baseline in Settings to enhance financial analysis.',
-        overBudgetCnt === 0
-          ? 'Great job keeping all spending within allocated limits.'
-          : `${overBudgetCnt} categories have exceeded their monthly budget limits.`,
-      ],
-      updatedAt: new Date().toISOString(),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

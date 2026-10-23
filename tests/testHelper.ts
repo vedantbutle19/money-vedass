@@ -11,7 +11,7 @@ let serverInstance: Server | null = null;
 let serverPort = 0;
 
 export async function startTestServer(): Promise<{ baseUrl: string; port: number }> {
-  initDatabase();
+  await initDatabase();
 
   return new Promise((resolve) => {
     serverInstance = app.listen(0, '127.0.0.1', () => {

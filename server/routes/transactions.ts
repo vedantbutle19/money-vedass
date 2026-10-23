@@ -60,7 +60,7 @@ function roundCurrency(val: number): number {
 }
 
 // Helper to adjust balance & budget scoped to a specific user
-function applyTransactionEffects(userId: string, tx: {
+async function applyTransactionEffects(userId: string, tx: {
   type: string;
   amount: number;
   accountId: string;
@@ -72,21 +72,21 @@ function applyTransactionEffects(userId: string, tx: {
   const { year, month } = parseDateParts(tx.date);
 
   if (tx.type === 'expense') {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
     
     // Update budget spent for this category, month/year, and user
-    db.prepare(`UPDATE budgets SET spent = ROUND(spent + ?, 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
+    await db.prepare(`UPDATE budgets SET spent = ROUND(spent + ?, 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
       .run(amt, tx.categoryId, month, year, userId);
   } else if (tx.type === 'income') {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
   } else if (tx.type === 'transfer' && tx.toAccountId) {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
   }
 }
 
 // Helper to revert balance & budget scoped to a specific user
-function revertTransactionEffects(userId: string, tx: {
+async function revertTransactionEffects(userId: string, tx: {
   type: string;
   amount: number;
   accountId: string;
@@ -98,20 +98,20 @@ function revertTransactionEffects(userId: string, tx: {
   const { year, month } = parseDateParts(tx.date);
 
   if (tx.type === 'expense') {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
     
-    db.prepare(`UPDATE budgets SET spent = ROUND(MAX(0, spent - ?), 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
+    await db.prepare(`UPDATE budgets SET spent = ROUND(MAX(0, spent - ?), 2), updated_at = datetime('now') WHERE category_id = ? AND month = ? AND year = ? AND user_id = ?`)
       .run(amt, tx.categoryId, month, year, userId);
   } else if (tx.type === 'income') {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
   } else if (tx.type === 'transfer' && tx.toAccountId) {
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
-    db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance + ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.accountId, userId);
+    await db.prepare(`UPDATE accounts SET balance = ROUND(balance - ?, 2), updated_at = datetime('now') WHERE id = ? AND user_id = ?`).run(amt, tx.toAccountId, userId);
   }
 }
 
 // GET /api/transactions - Scoped to logged-in user
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { month, year, accountId, categoryId, search, type } = req.query;
@@ -149,7 +149,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 
     query += ' ORDER BY date DESC, created_at DESC';
 
-    const rows = db.prepare(query).all(...params);
+    const rows = await db.prepare(query).all(...params);
     res.json(rows.map(formatTransaction));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -157,10 +157,10 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // GET /api/transactions/:id - Scoped to logged-in user
-router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const row = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const row = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!row) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
@@ -171,7 +171,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/transactions - Create for logged-in user
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const {
@@ -206,7 +206,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Verify source account belongs strictly to authenticated user
-    const sourceAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
+    const sourceAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(accountId, userId);
     if (!sourceAcc) {
       return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to your account.' });
     }
@@ -219,7 +219,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       if (toAccountId === accountId) {
         return res.status(400).json({ error: 'Source and destination accounts cannot be identical' });
       }
-      const destAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(toAccountId, userId);
+      const destAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(toAccountId, userId);
       if (!destAcc) {
         return res.status(400).json({ error: 'Invalid destination account ID. Destination account does not exist or does not belong to your account.' });
       }
@@ -229,52 +229,44 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const tagsJson = tags ? JSON.stringify(tags) : null;
     const now = new Date().toISOString();
 
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      db.prepare(`
-        INSERT INTO transactions (
-          id, user_id, account_id, to_account_id, category_id, type, amount, currency, date,
-          merchant, description, payment_method, notes, tags, receipt_url, is_recurring,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id,
-        userId,
-        accountId,
-        toAccountId || null,
-        categoryId,
-        type,
-        cleanAmount,
-        currency || 'INR',
-        date,
-        merchant || null,
-        description,
-        paymentMethod || 'UPI',
-        notes || null,
-        tagsJson,
-        receiptUrl || null,
-        isRecurring ? 1 : 0,
-        now,
-        now
-      );
+    await db.prepare(`
+      INSERT INTO transactions (
+        id, user_id, account_id, to_account_id, category_id, type, amount, currency, date,
+        merchant, description, payment_method, notes, tags, receipt_url, is_recurring,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      userId,
+      accountId,
+      toAccountId || null,
+      categoryId,
+      type,
+      cleanAmount,
+      currency || 'INR',
+      date,
+      merchant || null,
+      description,
+      paymentMethod || 'UPI',
+      notes || null,
+      tagsJson,
+      receiptUrl || null,
+      isRecurring ? 1 : 0,
+      now,
+      now
+    );
 
-      // Auto update balances and budgets for current user
-      applyTransactionEffects(userId, {
-        type,
-        amount: cleanAmount,
-        accountId,
-        toAccountId,
-        categoryId,
-        date,
-      });
+    // Auto update balances and budgets for current user
+    await applyTransactionEffects(userId, {
+      type,
+      amount: cleanAmount,
+      accountId,
+      toAccountId,
+      categoryId,
+      date,
+    });
 
-      db.exec('COMMIT;');
-    } catch (txError) {
-      db.exec('ROLLBACK;');
-      throw txError;
-    }
-
-    const created = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatTransaction(created));
   } catch (err: any) {
     console.error('Create transaction error:', err);
@@ -283,10 +275,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/transactions/:id - Update transaction
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
@@ -323,7 +315,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Verify source account belongs to authenticated user
-    const sourceAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newAccountId, userId);
+    const sourceAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newAccountId, userId);
     if (!sourceAcc) {
       return res.status(400).json({ error: 'Invalid account ID. Account does not exist or does not belong to you.' });
     }
@@ -335,9 +327,9 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       if (newToAccountId === newAccountId) {
         return res.status(400).json({ error: 'Source and destination accounts cannot be identical' });
       }
-      const destAcc = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newToAccountId, userId);
+      const destAcc = await db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?').get(newToAccountId, userId);
       if (!destAcc) {
-        return res.status(400).json({ error: 'Invalid destination account ID. Account does not exist or does not belong to you.' });
+        return res.status(400).json({ error: 'Invalid destination account ID. Destination account does not exist or does not belong to you.' });
       }
     }
 
@@ -352,62 +344,54 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     const newIsRecurring = isRecurring !== undefined ? (isRecurring ? 1 : 0) : existing.is_recurring;
     const now = new Date().toISOString();
 
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      // 1. Revert existing transaction balance & budget impacts
-      revertTransactionEffects(userId, {
-        type: existing.type,
-        amount: Number(existing.amount),
-        accountId: existing.account_id,
-        toAccountId: existing.to_account_id,
-        categoryId: existing.category_id,
-        date: existing.date,
-      });
+    // 1. Revert existing transaction balance & budget impacts
+    await revertTransactionEffects(userId, {
+      type: existing.type,
+      amount: Number(existing.amount),
+      accountId: existing.account_id,
+      toAccountId: existing.to_account_id,
+      categoryId: existing.category_id,
+      date: existing.date,
+    });
 
-      // 2. Update transaction record
-      db.prepare(`
-        UPDATE transactions
-        SET account_id = ?, to_account_id = ?, category_id = ?, type = ?, amount = ?, currency = ?,
-            date = ?, merchant = ?, description = ?, payment_method = ?, notes = ?,
-            tags = ?, receipt_url = ?, is_recurring = ?, updated_at = ?
-        WHERE id = ? AND user_id = ?
-      `).run(
-        newAccountId,
-        newToAccountId || null,
-        newCategoryId,
-        newType,
-        newAmount,
-        newCurrency,
-        newDate,
-        newMerchant || null,
-        newDesc,
-        newPaymentMethod,
-        newNotes || null,
-        newTags,
-        newReceiptUrl || null,
-        newIsRecurring,
-        now,
-        req.params.id,
-        userId
-      );
+    // 2. Update transaction record
+    await db.prepare(`
+      UPDATE transactions
+      SET account_id = ?, to_account_id = ?, category_id = ?, type = ?, amount = ?, currency = ?,
+          date = ?, merchant = ?, description = ?, payment_method = ?, notes = ?,
+          tags = ?, receipt_url = ?, is_recurring = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(
+      newAccountId,
+      newToAccountId || null,
+      newCategoryId,
+      newType,
+      newAmount,
+      newCurrency,
+      newDate,
+      newMerchant || null,
+      newDesc,
+      newPaymentMethod,
+      newNotes || null,
+      newTags,
+      newReceiptUrl || null,
+      newIsRecurring,
+      now,
+      req.params.id,
+      userId
+    );
 
-      // 3. Apply new transaction balance & budget impacts
-      applyTransactionEffects(userId, {
-        type: newType,
-        amount: newAmount,
-        accountId: newAccountId,
-        toAccountId: newToAccountId,
-        categoryId: newCategoryId,
-        date: newDate,
-      });
+    // 3. Apply new transaction balance & budget impacts
+    await applyTransactionEffects(userId, {
+      type: newType,
+      amount: newAmount,
+      accountId: newAccountId,
+      toAccountId: newToAccountId,
+      categoryId: newCategoryId,
+      date: newDate,
+    });
 
-      db.exec('COMMIT;');
-    } catch (txError) {
-      db.exec('ROLLBACK;');
-      throw txError;
-    }
-
-    const updated = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatTransaction(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -415,7 +399,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/transactions/batch-delete - Delete multiple transactions
-router.post('/batch-delete', (req: AuthenticatedRequest, res: Response) => {
+router.post('/batch-delete', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { ids } = req.body;
@@ -423,26 +407,19 @@ router.post('/batch-delete', (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Array of transaction IDs required' });
     }
 
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      for (const id of ids) {
-        const existing = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(id, userId) as any;
-        if (existing) {
-          revertTransactionEffects(userId, {
-            type: existing.type,
-            amount: Number(existing.amount),
-            accountId: existing.account_id,
-            toAccountId: existing.to_account_id,
-            categoryId: existing.category_id,
-            date: existing.date,
-          });
-          db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(id, userId);
-        }
+    for (const id of ids) {
+      const existing = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(id, userId) as any;
+      if (existing) {
+        await revertTransactionEffects(userId, {
+          type: existing.type,
+          amount: Number(existing.amount),
+          accountId: existing.account_id,
+          toAccountId: existing.to_account_id,
+          categoryId: existing.category_id,
+          date: existing.date,
+        });
+        await db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(id, userId);
       }
-      db.exec('COMMIT;');
-    } catch (txError) {
-      db.exec('ROLLBACK;');
-      throw txError;
     }
 
     res.json({ success: true, count: ids.length });
@@ -452,30 +429,23 @@ router.post('/batch-delete', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/transactions/:id - Delete single transaction
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      revertTransactionEffects(userId, {
-        type: existing.type,
-        amount: Number(existing.amount),
-        accountId: existing.account_id,
-        toAccountId: existing.to_account_id,
-        categoryId: existing.category_id,
-        date: existing.date,
-      });
-      db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
-      db.exec('COMMIT;');
-    } catch (txError) {
-      db.exec('ROLLBACK;');
-      throw txError;
-    }
+    await revertTransactionEffects(userId, {
+      type: existing.type,
+      amount: Number(existing.amount),
+      accountId: existing.account_id,
+      toAccountId: existing.to_account_id,
+      categoryId: existing.category_id,
+      date: existing.date,
+    });
+    await db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(req.params.id, userId);
 
     res.json({ success: true, message: 'Transaction deleted' });
   } catch (err: any) {

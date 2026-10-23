@@ -21,10 +21,10 @@ function formatGoal(row: any) {
 }
 
 // GET /api/goals
-router.get('/', (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const rows = db.prepare('SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+    const rows = await db.prepare('SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC').all(userId);
     res.json(rows.map(formatGoal));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -32,7 +32,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/goals
-router.post('/', (req: AuthenticatedRequest, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { name, targetAmount, currentAmount = 0, targetDate, monthlyContribution = 0, category, color } = req.body;
@@ -43,7 +43,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const id = `g_${userId}_${Date.now()}`;
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO goals (id, user_id, name, target_amount, current_amount, target_date, monthly_contribution, category, color, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -60,7 +60,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
       now
     );
 
-    const created = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(id, userId);
+    const created = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(id, userId);
     res.status(201).json(formatGoal(created));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -68,10 +68,10 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/goals/:id
-router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Goal not found' });
     }
@@ -79,7 +79,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     const { name, targetAmount, currentAmount, targetDate, monthlyContribution, category, color } = req.body;
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE goals
       SET name = ?, target_amount = ?, current_amount = ?, target_date = ?, monthly_contribution = ?, category = ?, color = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
@@ -96,7 +96,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       userId
     );
 
-    const updated = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatGoal(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -104,7 +104,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/goals/:id/contribute - Record contribution towards savings goal
-router.post('/:id/contribute', (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/contribute', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { amount } = req.body;
@@ -114,7 +114,7 @@ router.post('/:id/contribute', (req: AuthenticatedRequest, res: Response) => {
     }
     const cleanAmount = Math.round((numAmount + Number.EPSILON) * 100) / 100;
 
-    const existing = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const existing = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
     if (!existing) {
       return res.status(404).json({ error: 'Goal not found' });
     }
@@ -122,13 +122,13 @@ router.post('/:id/contribute', (req: AuthenticatedRequest, res: Response) => {
     const newCurrent = Math.round((Number(existing.current_amount) + cleanAmount + Number.EPSILON) * 100) / 100;
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE goals
       SET current_amount = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
     `).run(newCurrent, now, req.params.id, userId);
 
-    const updated = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const updated = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     res.json(formatGoal(updated));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -136,15 +136,15 @@ router.post('/:id/contribute', (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/goals/:id
-router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const existing = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    const existing = await db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Goal not found' });
     }
 
-    db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').run(req.params.id, userId);
+    await db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').run(req.params.id, userId);
     res.json({ success: true, message: 'Goal deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
