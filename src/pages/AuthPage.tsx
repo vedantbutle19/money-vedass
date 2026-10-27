@@ -423,6 +423,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </button>
                 </div>
               )}
+
+              {mode === 'forgot' && otpChannel === 'email' && error.toLowerCase().includes('resend') && (
+                <div className="pt-2 border-t border-rose-200/70 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Have a mobile registered?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpChannel('sms');
+                      setError('');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  >
+                    <Smartphone size={13} />
+                    <span>Switch to SMS OTP →</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

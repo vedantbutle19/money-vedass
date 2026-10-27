@@ -299,6 +299,14 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
     // Send via Resend
     const emailResult = await sendOtpEmail(cleanEmail, otpCode, user.name);
 
+    if (!emailResult.success) {
+      console.error(`❌ Email OTP failed for ${cleanEmail}:`, emailResult.error);
+      return res.status(502).json({
+        error: emailResult.error || 'Failed to send verification email. Please check server email configuration or use SMS OTP.',
+        missingConfig: emailResult.simulated ? 'RESEND_API_KEY' : undefined,
+      });
+    }
+
     const isNonProduction = process.env.NODE_ENV !== 'production';
     const allowDevOtpSimulation = isNonProduction && (process.env.ENABLE_DEV_OTP_SIMULATION === 'true' || emailResult.simulated);
 

@@ -156,14 +156,28 @@ This code is valid for 5 minutes. Do not share this code with anyone.
 
 If you did not request a password reset, please ignore this email.`;
 
-  // Fallback to simulated delivery if RESEND_API_KEY is not configured
+  const isTest = process.env.NODE_ENV === 'test';
+  const isSimulationAllowed = process.env.ENABLE_DEV_OTP_SIMULATION === 'true' || isTest;
+
+  // Fallback if RESEND_API_KEY is not configured
   if (!apiKey || apiKey === 'your_resend_api_key_here') {
-    console.log(
-      `📧 [Resend Simulated Dispatch] -> To: ${cleanEmail} | OTP Code: ${otpCode} | Note: Configure RESEND_API_KEY in .env/Render for real delivery`
+    if (isSimulationAllowed) {
+      console.log(
+        `📧 [Resend Simulated Dispatch] -> To: ${cleanEmail} | OTP Code: ${otpCode}`
+      );
+      return {
+        success: true,
+        simulated: true,
+      };
+    }
+
+    console.warn(
+      `⚠️ [Resend Missing Key] RESEND_API_KEY is not set in environment variables. Cannot send email to ${cleanEmail}.`
     );
     return {
-      success: true,
+      success: false,
       simulated: true,
+      error: 'RESEND_API_KEY is not configured in Render environment variables. Please add your Resend API key in Render Dashboard to enable live email delivery.',
     };
   }
 
@@ -186,9 +200,13 @@ If you did not request a password reset, please ignore this email.`;
     const data = await response.json();
     if (!response.ok) {
       console.warn('Resend API error:', data);
+      let errorMsg = data.message || 'Failed to send email via Resend';
+      if (typeof errorMsg === 'string' && errorMsg.includes('testing emails to your own email address')) {
+        errorMsg = `${data.message} Note: With Resend free tier (using onboarding@resend.dev), emails can only be delivered to your registered Resend account email. To deliver to other recipients, please verify a domain in your Resend dashboard.`;
+      }
       return {
         success: false,
-        error: data.message || 'Failed to send email via Resend',
+        error: errorMsg,
       };
     }
 

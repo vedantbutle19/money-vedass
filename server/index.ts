@@ -90,6 +90,10 @@ app.get('/api/health', async (req: Request, res: Response) => {
       status: 'healthy',
       database: 'connected',
       storage: process.env.TURSO_DATABASE_URL ? 'turso_cloud' : 'local_sqlite',
+      emailService: {
+        configured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 'your_resend_api_key_here'),
+        provider: 'resend',
+      },
       timestamp: new Date().toISOString(),
       stats: {
         users: userCount ? userCount.count : 0,
