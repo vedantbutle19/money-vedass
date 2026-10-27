@@ -185,6 +185,50 @@ describe('Security, IDOR Access Control & Features Suite', () => {
     assert.strictEqual(toggle2.data.status, 'active');
   });
 
+  test('Feature: Bill deduction endpoint POST /api/subscriptions/:id/deduct advances due date, updates balance, and logs transaction', async () => {
+    // 1. Create a bill with rent category
+    const billRes = await apiRequest('POST', '/api/subscriptions', {
+      name: 'House Rent',
+      amount: 15000,
+      billingCycle: 'monthly',
+      nextBillingDate: '2026-11-01',
+      category: 'rent',
+      accountId: accountIdA,
+      autoDeduct: true,
+      billType: 'rent',
+    }, userTokenA);
+    assert.strictEqual(billRes.status, 201);
+    const rentBillId = billRes.data.id;
+    assert.strictEqual(billRes.data.category, 'rent');
+    assert.strictEqual(billRes.data.autoDeduct, true);
+
+    // Get current balance of accountIdA
+    const accBefore = await apiRequest('GET', `/api/accounts/${accountIdA}`, undefined, userTokenA);
+    const balanceBefore = accBefore.data.balance;
+
+    // Deduct the bill
+    const deductRes = await apiRequest('POST', `/api/subscriptions/${rentBillId}/deduct`, {
+      amount: 15000,
+      date: '2026-11-01',
+      notes: 'Rent payment via netbanking',
+    }, userTokenA);
+
+    assert.strictEqual(deductRes.status, 200);
+    assert.strictEqual(deductRes.data.success, true);
+    assert.strictEqual(deductRes.data.deductedAmount, 15000);
+    assert.strictEqual(deductRes.data.nextBillingDate, '2026-12-01');
+
+    // Verify account balance was deducted
+    const accAfter = await apiRequest('GET', `/api/accounts/${accountIdA}`, undefined, userTokenA);
+    assert.strictEqual(accAfter.data.balance, Math.round((balanceBefore - 15000) * 100) / 100);
+
+    // Verify User B cannot deduct User A's bill (IDOR check)
+    const idorDeduct = await apiRequest('POST', `/api/subscriptions/${rentBillId}/deduct`, {
+      amount: 15000,
+    }, userTokenB);
+    assert.strictEqual(idorDeduct.status, 404);
+  });
+
   test('Feature: Recurring Transaction creation and PATCH /api/recurring/:id/toggle endpoint', async () => {
     const recRes = await apiRequest('POST', '/api/recurring', {
       name: 'Broadband Internet',

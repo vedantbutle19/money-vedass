@@ -133,7 +133,7 @@ function AppContent() {
       case 'goals':
         return { title: 'Financial Goals', breadcrumbs: ['money vedass', 'Goals'] };
       case 'subscriptions':
-        return { title: 'Subscriptions', breadcrumbs: ['money vedass', 'Subscriptions'] };
+        return { title: 'Bills & Subscriptions', breadcrumbs: ['money vedass', 'Bills & Subscriptions'] };
       case 'recurring':
         return { title: 'Recurring Schedules', breadcrumbs: ['money vedass', 'Recurring'] };
       case 'analytics':

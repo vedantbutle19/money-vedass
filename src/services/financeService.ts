@@ -460,6 +460,86 @@ export const financeService = {
     }
   },
 
+  async deductSubscription(
+    id: string,
+    options?: { amount?: number; accountId?: string; date?: string; notes?: string }
+  ): Promise<{ success: boolean; message: string; deductedAmount: number; nextBillingDate: string; subscription: Subscription }> {
+    try {
+      return await apiRequest<{ success: boolean; message: string; deductedAmount: number; nextBillingDate: string; subscription: Subscription }>(
+        `/subscriptions/${id}/deduct`,
+        {
+          method: 'POST',
+          body: JSON.stringify(options || {}),
+        }
+      );
+    } catch (e) {
+      console.warn('Backend unavailable, using local deduction fallback:', e);
+      const subs = await this.getSubscriptions();
+      const sub = subs.find((s) => s.id === id);
+      if (!sub) throw new Error('Subscription not found');
+
+      const deductAmount = options?.amount !== undefined ? Number(options.amount) : sub.amount;
+      const targetAccountId = options?.accountId || sub.accountId;
+      const paymentDate = options?.date || new Date().toISOString().split('T')[0];
+
+      // Update account balance
+      const accounts = await this.getAccounts();
+      const accIndex = accounts.findIndex((a) => a.id === targetAccountId);
+      if (accIndex !== -1) {
+        accounts[accIndex] = {
+          ...accounts[accIndex],
+          balance: Math.round((accounts[accIndex].balance - deductAmount) * 100) / 100,
+          updatedAt: new Date().toISOString(),
+        };
+        saveStorage(STORAGE_KEYS.ACCOUNTS, accounts);
+      }
+
+      // Record transaction
+      const transactions = await this.getTransactions();
+      const newTx: Transaction = {
+        id: `tx_${Date.now()}`,
+        userId: 'usr_default',
+        accountId: targetAccountId,
+        categoryId: sub.category,
+        type: 'expense',
+        amount: deductAmount,
+        currency: 'INR',
+        date: paymentDate,
+        merchant: sub.name,
+        description: `${sub.name} (Recurring Payment)`,
+        paymentMethod: 'Bank Transfer',
+        notes: options?.notes || `Recurring payment for ${sub.name}`,
+        tags: ['#recurring', '#bill'],
+        isRecurring: true,
+      };
+      saveStorage(STORAGE_KEYS.TRANSACTIONS, [newTx, ...transactions]);
+
+      // Calculate next billing date
+      const [year, month, day] = (sub.nextBillingDate || paymentDate).split('-').map(Number);
+      const nextMonthDate = new Date(year, (sub.billingCycle === 'yearly' ? month + 11 : month), day);
+      const nextBillingDate = nextMonthDate.toISOString().split('T')[0];
+
+      const updatedSub: Subscription = {
+        ...sub,
+        nextBillingDate,
+        lastPaidDate: paymentDate,
+      };
+      const subIndex = subs.findIndex((s) => s.id === id);
+      if (subIndex !== -1) {
+        subs[subIndex] = updatedSub;
+        saveStorage(STORAGE_KEYS.SUBSCRIPTIONS, subs);
+      }
+
+      return {
+        success: true,
+        message: `Successfully deducted ₹${deductAmount} for ${sub.name}`,
+        deductedAmount: deductAmount,
+        nextBillingDate,
+        subscription: updatedSub,
+      };
+    }
+  },
+
   // Recurring
   async getRecurring(): Promise<RecurringTransaction[]> {
     try {

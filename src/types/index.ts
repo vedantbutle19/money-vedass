@@ -4,6 +4,16 @@ export type PaymentMethod = 'UPI' | 'Debit Card' | 'Credit Card' | 'Cash' | 'Ban
 
 export type CategoryId =
   | 'housing'
+  | 'rent'
+  | 'house_loan'
+  | 'emi'
+  | 'water'
+  | 'electricity'
+  | 'broadband'
+  | 'mobile_recharge'
+  | 'gas_bill'
+  | 'maintenance'
+  | 'insurance'
   | 'food'
   | 'transport'
   | 'shopping'
@@ -12,8 +22,10 @@ export type CategoryId =
   | 'salary'
   | 'investment'
   | 'health'
+  | 'education'
   | 'transfer'
-  | 'other';
+  | 'other'
+  | (string & {});
 
 export interface Category {
   id: CategoryId;
@@ -82,12 +94,15 @@ export interface Subscription {
   id: string;
   name: string;
   amount: number;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: 'monthly' | 'yearly' | 'quarterly';
   nextBillingDate: string;
   category: CategoryId;
   accountId: string;
   status: 'active' | 'paused';
   icon: string;
+  autoDeduct?: boolean;
+  lastPaidDate?: string;
+  billType?: string;
 }
 
 export interface RecurringTransaction {

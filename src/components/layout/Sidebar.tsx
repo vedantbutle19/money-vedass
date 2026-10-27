@@ -50,7 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'accounts', label: 'Accounts', icon: Landmark },
     { id: 'budgets', label: 'Budgets', icon: PiggyBank },
     { id: 'goals', label: 'Goals', icon: Target },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Repeat },
+    { id: 'subscriptions', label: 'Bills & Subscriptions', icon: Repeat },
     { id: 'recurring', label: 'Recurring', icon: CalendarClock },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'health', label: 'Financial Health', icon: ShieldCheck },

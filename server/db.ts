@@ -208,6 +208,9 @@ export async function initDatabase() {
       account_id TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       icon TEXT NOT NULL,
+      auto_deduct INTEGER DEFAULT 0,
+      last_paid_date TEXT,
+      bill_type TEXT DEFAULT 'bill',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -290,6 +293,18 @@ export async function initDatabase() {
 
   try {
     await c.execute("ALTER TABLE otp_codes ADD COLUMN attempts INTEGER DEFAULT 0;");
+  } catch {}
+
+  try {
+    await c.execute("ALTER TABLE subscriptions ADD COLUMN auto_deduct INTEGER DEFAULT 0;");
+  } catch {}
+
+  try {
+    await c.execute("ALTER TABLE subscriptions ADD COLUMN last_paid_date TEXT;");
+  } catch {}
+
+  try {
+    await c.execute("ALTER TABLE subscriptions ADD COLUMN bill_type TEXT DEFAULT 'bill';");
   } catch {
     // Column already exists
   }
@@ -299,28 +314,32 @@ export async function initDatabase() {
 
 // Seed global shared categories only (users must register first)
 export async function seedInitialDataIfEmpty() {
-  const catCheck = await db.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
-  if (catCheck && catCheck.count > 0) {
-    return; // Already initialized
-  }
-
-  console.log('🌱 Seeding initial system categories...');
-
   const categories = [
-    { id: 'housing', name: 'Housing & Rent', iconName: 'Home', color: '#6366F1', type: 'expense' },
+    { id: 'housing', name: 'Housing & Property', iconName: 'Home', color: '#6366F1', type: 'expense' },
+    { id: 'rent', name: 'House Rent', iconName: 'Building', color: '#6366F1', type: 'expense' },
+    { id: 'house_loan', name: 'Home Loan EMI', iconName: 'Home', color: '#4F46E5', type: 'expense' },
+    { id: 'emi', name: 'Loan & Card EMI', iconName: 'Landmark', color: '#F59E0B', type: 'expense' },
+    { id: 'water', name: 'Water Bill', iconName: 'Droplets', color: '#06B6D4', type: 'expense' },
+    { id: 'electricity', name: 'Electricity Bill', iconName: 'Zap', color: '#EAB308', type: 'expense' },
+    { id: 'broadband', name: 'Internet & Broadband', iconName: 'Wifi', color: '#3B82F6', type: 'expense' },
+    { id: 'mobile_recharge', name: 'Mobile & Phone Bill', iconName: 'Smartphone', color: '#10B981', type: 'expense' },
+    { id: 'gas_bill', name: 'Cooking Gas & LPG', iconName: 'Flame', color: '#F97316', type: 'expense' },
+    { id: 'maintenance', name: 'Society Maintenance', iconName: 'Wrench', color: '#64748B', type: 'expense' },
+    { id: 'insurance', name: 'Insurance & Premium', iconName: 'Shield', color: '#EC4899', type: 'expense' },
     { id: 'food', name: 'Food & Dining', iconName: 'UtensilsCrossed', color: '#F97316', type: 'expense' },
     { id: 'transport', name: 'Transportation', iconName: 'Car', color: '#0EA5E9', type: 'expense' },
     { id: 'shopping', name: 'Shopping & Retail', iconName: 'ShoppingBag', color: '#EC4899', type: 'expense' },
-    { id: 'entertainment', name: 'Entertainment', iconName: 'Tv', color: '#8B5CF6', type: 'expense' },
+    { id: 'entertainment', name: 'Subscriptions & Entertainment', iconName: 'Tv', color: '#8B5CF6', type: 'expense' },
     { id: 'bills', name: 'Bills & Utilities', iconName: 'Receipt', color: '#10B981', type: 'expense' },
     { id: 'health', name: 'Health & Wellness', iconName: 'HeartPulse', color: '#EF4444', type: 'expense' },
+    { id: 'education', name: 'Tuition & Education', iconName: 'GraduationCap', color: '#8B5CF6', type: 'expense' },
     { id: 'salary', name: 'Salary & Professional', iconName: 'Briefcase', color: '#059669', type: 'income' },
     { id: 'investment', name: 'Investments & Returns', iconName: 'TrendingUp', color: '#0284C7', type: 'income' },
     { id: 'transfer', name: 'Internal Transfer', iconName: 'ArrowRightLeft', color: '#64748B', type: 'both' },
     { id: 'other', name: 'Other Expenses', iconName: 'Layers', color: '#94A3B8', type: 'expense' },
   ];
   for (const c of categories) {
-    await db.prepare('INSERT INTO categories (id, name, icon_name, color, type) VALUES (?, ?, ?, ?, ?)').run(c.id, c.name, c.iconName, c.color, c.type);
+    await db.prepare('INSERT OR IGNORE INTO categories (id, name, icon_name, color, type) VALUES (?, ?, ?, ?, ?)').run(c.id, c.name, c.iconName, c.color, c.type);
   }
 }
 

@@ -67,6 +67,10 @@ interface FinanceContextType {
   updateSubscription: (id: string, sub: Partial<Subscription>) => Promise<Subscription>;
   deleteSubscription: (id: string) => Promise<void>;
   toggleSubscriptionStatus: (id: string) => Promise<void>;
+  deductSubscription: (
+    id: string,
+    options?: { amount?: number; accountId?: string; date?: string; notes?: string }
+  ) => Promise<{ success: boolean; message: string; deductedAmount: number; nextBillingDate: string; subscription: Subscription }>;
   addRecurring: (rec: Omit<RecurringTransaction, 'id'>) => Promise<RecurringTransaction>;
   updateRecurring: (id: string, rec: Partial<RecurringTransaction>) => Promise<RecurringTransaction>;
   deleteRecurring: (id: string) => Promise<void>;
@@ -413,6 +417,16 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     showToast(`Subscription ${updated.status === 'active' ? 'resumed' : 'paused'}`, 'info');
   };
 
+  const deductSubscription = async (
+    id: string,
+    options?: { amount?: number; accountId?: string; date?: string; notes?: string }
+  ) => {
+    const result = await financeService.deductSubscription(id, options);
+    await loadData();
+    showToast(result.message || 'Payment deducted successfully', 'success');
+    return result;
+  };
+
   const addRecurring = async (rec: Omit<RecurringTransaction, 'id'>) => {
     const created = await financeService.createRecurring(rec);
     await loadData();
@@ -512,6 +526,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateSubscription,
         deleteSubscription,
         toggleSubscriptionStatus,
+        deductSubscription,
         addRecurring,
         updateRecurring,
         deleteRecurring,
