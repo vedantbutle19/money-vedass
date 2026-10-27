@@ -3,12 +3,14 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Inbox,
   KeyRound,
   Lock,
   Mail,
   MessageSquareText,
   Phone,
   RefreshCw,
+  Send,
   ShieldAlert,
   Smartphone,
   User,
@@ -32,6 +34,13 @@ interface SmsNotificationPayload {
   text: string;
 }
 
+interface EmailNotificationPayload {
+  recipient: string;
+  otpCode: string;
+  provider?: string;
+  text: string;
+}
+
 export const AuthPage: React.FC<AuthPageProps> = ({
   initialMode = 'login',
   onSuccess,
@@ -50,11 +59,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [acceptTerms, setAcceptTerms] = useState(true);
 
-  // SMS OTP states for Forgot Password
+  // OTP states for Forgot Password (supports Email via Resend & SMS)
+  const [otpChannel, setOtpChannel] = useState<'email' | 'sms'>('email');
   const [otpStep, setOtpStep] = useState<'request' | 'verify'>('request');
   const [otpCode, setOtpCode] = useState('');
   const [maskedPhone, setMaskedPhone] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
   const [smsBanner, setSmsBanner] = useState<SmsNotificationPayload | null>(null);
+  const [emailBanner, setEmailBanner] = useState<EmailNotificationPayload | null>(null);
 
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -68,10 +80,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       setError('Please enter your registered email address');
       return;
     }
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) {
-      setError('Please enter a valid 10-digit mobile number to receive the SMS OTP');
-      return;
+
+    if (otpChannel === 'sms') {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length < 10) {
+        setError('Please enter a valid 10-digit mobile number to receive the SMS OTP');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -79,21 +94,35 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       const res = await fetch(`${API_BASE}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          phone: otpChannel === 'sms' ? phone.trim() : undefined,
+          channel: otpChannel,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to send SMS OTP.');
+        throw new Error(data.error || 'Failed to send verification code.');
       }
 
-      setMaskedPhone(data.maskedPhone || phone);
-      if (data.smsNotification) {
-        setSmsBanner(data.smsNotification);
+      if (otpChannel === 'sms') {
+        setMaskedPhone(data.maskedPhone || phone);
+        if (data.smsNotification) {
+          setSmsBanner(data.smsNotification);
+        }
+        setSuccessMessage(data.message || '6-digit SMS OTP sent to your mobile number.');
+      } else {
+        setMaskedEmail(data.maskedEmail || email);
+        if (data.emailNotification) {
+          setEmailBanner(data.emailNotification);
+        }
+        setSuccessMessage(
+          data.message || '6-digit verification code sent to your email address via Resend.'
+        );
       }
       setOtpStep('verify');
-      setSuccessMessage(data.message || '6-digit SMS OTP sent to your mobile number.');
     } catch (err: any) {
-      setError(err.message || 'Could not send SMS OTP.');
+      setError(err.message || 'Could not send verification code.');
     } finally {
       setIsSubmitting(false);
     }
@@ -110,9 +139,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         return;
       }
 
-      // Step 2: Verify SMS OTP & Change Password
+      // Step 2: Verify OTP & Change Password
       if (!otpCode.trim() || otpCode.trim().length !== 6) {
-        setError('Please enter the 6-digit SMS OTP sent to your mobile number');
+        setError('Please enter the 6-digit verification code');
         return;
       }
       if (!password || password.length < 8) {
@@ -131,7 +160,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: email.trim(),
-            phone: phone.trim(),
             otp: otpCode.trim(),
             newPassword: password,
           }),
@@ -141,12 +169,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           throw new Error(data.error || 'Password reset failed.');
         }
         setSuccessMessage(
-          data.message || 'SMS OTP verified & password changed! You can now sign in.'
+          data.message || 'Verification code confirmed & password reset! You can now sign in.'
         );
         setPassword('');
         setConfirmPassword('');
         setOtpCode('');
         setSmsBanner(null);
+        setEmailBanner(null);
         setOtpStep('request');
         setMode('login');
       } catch (err: any) {
@@ -222,13 +251,46 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center px-4 py-12 relative">
       <button
         onClick={onBackToLanding}
-        className="absolute top-6 left-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+        className="absolute top-6 left-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
       >
         <ArrowLeft size={14} />
         <span>Back to Landing</span>
       </button>
 
-      {/* Incoming SMS OTP Notification Banner */}
+      {/* Simulated Email OTP Notification Banner */}
+      {mode === 'forgot' && emailBanner && (
+        <div className="w-full max-w-md mb-4 p-4 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 shrink-0 mt-0.5">
+                <Inbox size={16} />
+              </div>
+              <div className="text-xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-indigo-400">Email (Resend)</span>
+                  <span className="text-[10px] text-slate-400">To: {emailBanner.recipient} · Just now</span>
+                </div>
+                <p className="text-slate-200 leading-relaxed">
+                  Your Money Vedass verification code is{' '}
+                  <span className="px-1.5 py-0.5 rounded bg-white/15 font-mono font-bold text-emerald-400 tracking-widest">
+                    {emailBanner.otpCode}
+                  </span>
+                  . Valid for 5 minutes.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOtpCode(emailBanner.otpCode)}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
+            >
+              Auto-Fill Code
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Simulated SMS OTP Notification Banner */}
       {mode === 'forgot' && smsBanner && (
         <div className="w-full max-w-md mb-4 p-4 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="flex items-start justify-between gap-3">
@@ -271,18 +333,58 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               ? 'Sign In to Your Account'
               : mode === 'signup'
               ? 'Register New Account'
-              : 'Reset Password via SMS OTP'}
+              : 'Reset Your Password'}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {mode === 'login'
               ? 'Enter your registered email and password to access your personal ledger'
               : mode === 'signup'
-              ? 'Register your email and mobile number to initialize your private financial record'
+              ? 'Register your email and credentials to initialize your private financial record'
               : otpStep === 'request'
-              ? 'Enter your registered email and mobile number to receive a 6-digit SMS OTP'
-              : `Enter the 6-digit OTP sent to ${maskedPhone} and set your new password`}
+              ? otpChannel === 'email'
+                ? 'Enter your registered email to receive a 6-digit verification code'
+                : 'Enter your registered email and mobile number to receive a 6-digit SMS OTP'
+              : `Enter the 6-digit code sent to ${otpChannel === 'email' ? maskedEmail || email : maskedPhone || phone} and set your new password`}
           </p>
         </div>
+
+        {/* Channel Selector for Forgot Password */}
+        {mode === 'forgot' && otpStep === 'request' && (
+          <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setOtpChannel('email');
+                setError('');
+                setSuccessMessage('');
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                otpChannel === 'email'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Mail size={14} />
+              <span>Email Code (Resend)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOtpChannel('sms');
+                setError('');
+                setSuccessMessage('');
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                otpChannel === 'sms'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Smartphone size={14} />
+              <span>SMS OTP</span>
+            </button>
+          </div>
+        )}
 
         {successMessage && (
           <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-200 dark:border-emerald-900/50 flex items-start gap-2.5">
@@ -310,6 +412,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setError('');
                       setSuccessMessage('');
                       setSmsBanner(null);
+                      setEmailBanner(null);
                       setOtpStep('request');
                       setMode('signup');
                     }}
@@ -337,7 +440,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Rajiv Sharma"
+                  placeholder="Vedant Butle"
                   className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition-all text-slate-900 dark:text-white"
                 />
               </div>
@@ -346,7 +449,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
           <div>
             <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
-              Registered Email Address
+              Email Address
             </label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -362,16 +465,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
           </div>
 
-          {(mode === 'signup' || mode === 'forgot') && (
+          {(mode === 'signup' || (mode === 'forgot' && otpChannel === 'sms')) && (
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
-                Mobile Number {mode === 'forgot' ? '(for SMS OTP)' : '(for SMS OTP Recovery)'}
+                Mobile Number {mode === 'forgot' ? '(for SMS OTP)' : '(Optional Recovery Phone)'}
               </label>
               <div className="relative">
                 <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="tel"
-                  required={mode === 'forgot'}
+                  required={mode === 'forgot' && otpChannel === 'sms'}
                   disabled={mode === 'forgot' && otpStep === 'verify'}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -382,13 +485,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
           )}
 
-          {/* Forgot Password Step 2: 6-Digit SMS OTP Input */}
+          {/* Forgot Password Step 2: 6-Digit OTP Input */}
           {mode === 'forgot' && otpStep === 'verify' && (
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5">
-                  <Smartphone size={14} className="text-indigo-500" />
-                  <span>Enter 6-Digit SMS OTP</span>
+                  {otpChannel === 'email' ? <Mail size={14} className="text-indigo-500" /> : <Smartphone size={14} className="text-indigo-500" />}
+                  <span>Enter 6-Digit Verification Code</span>
                 </label>
                 <button
                   type="button"
@@ -397,7 +500,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <RefreshCw size={11} />
-                  <span>Resend SMS OTP</span>
+                  <span>Resend Code</span>
                 </button>
               </div>
               <input
@@ -430,12 +533,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setConfirmPassword('');
                       setOtpCode('');
                       setSmsBanner(null);
+                      setEmailBanner(null);
                       setOtpStep('request');
+                      setOtpChannel('email');
                       setMode('forgot');
                     }}
                     className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                   >
-                    Forgot password? (SMS OTP)
+                    Forgot password? (Email OTP)
                   </button>
                 )}
               </div>
@@ -532,8 +637,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               : mode === 'signup'
               ? 'Register & Start Tracking'
               : otpStep === 'request'
-              ? 'Send 6-Digit SMS OTP'
-              : 'Verify SMS OTP & Change Password'}
+              ? otpChannel === 'email'
+                ? 'Send Verification Code via Email'
+                : 'Send 6-Digit SMS OTP'
+              : 'Verify Code & Reset Password'}
           </button>
 
           {mode === 'forgot' && otpStep === 'verify' && (
@@ -543,12 +650,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 setOtpStep('request');
                 setOtpCode('');
                 setSmsBanner(null);
+                setEmailBanner(null);
                 setError('');
                 setSuccessMessage('');
               }}
               className="w-full py-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
             >
-              ← Change Email or Mobile Number
+              ← Change Email or Delivery Method
             </button>
           )}
         </form>
@@ -578,6 +686,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   setError('');
                   setSuccessMessage('');
                   setSmsBanner(null);
+                  setEmailBanner(null);
                   setOtpStep('request');
                   setMode('login');
                 }}

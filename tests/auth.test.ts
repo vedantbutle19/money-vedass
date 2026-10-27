@@ -217,4 +217,36 @@ describe('Authentication & Security Suite', () => {
     const bob = await db.prepare('SELECT phone FROM users WHERE email = ?').get('bob_nophone@example.com') as any;
     assert.strictEqual(bob.phone, '');
   });
+test('POST /api/auth/send-otp (Email Channel via Resend) - Sends OTP to registered email and resets password', async () => {
+    // 1. Request OTP via email channel (phone is optional)
+    const sendRes = await apiRequest('POST', '/api/auth/send-otp', {
+      email: 'bob_nophone@example.com',
+      channel: 'email',
+    });
+    assert.strictEqual(sendRes.status, 200);
+    assert.strictEqual(sendRes.data.success, true);
+    assert.strictEqual(sendRes.data.channel, 'email');
+    assert.ok(sendRes.data.message.includes('via Email'));
+
+    // 2. Fetch the generated OTP from database
+    const otpRow = await db.prepare('SELECT otp_code FROM otp_codes WHERE LOWER(email) = ? AND used = 0 ORDER BY created_at DESC LIMIT 1').get('bob_nophone@example.com') as any;
+    assert.ok(otpRow?.otp_code);
+
+    // 3. Reset password using the Email OTP
+    const resetRes = await apiRequest('POST', '/api/auth/reset-password', {
+      email: 'bob_nophone@example.com',
+      otp: otpRow.otp_code,
+      newPassword: 'BrandNewBobPassword789!',
+    });
+    assert.strictEqual(resetRes.status, 200);
+    assert.strictEqual(resetRes.data.success, true);
+
+    // 4. Verify login with new password succeeds
+    const loginRes = await apiRequest('POST', '/api/auth/login', {
+      email: 'bob_nophone@example.com',
+      password: 'BrandNewBobPassword789!',
+    });
+    assert.strictEqual(loginRes.status, 200);
+    assert.ok(loginRes.data.token);
+  });
 });

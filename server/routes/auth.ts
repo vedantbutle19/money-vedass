@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { db, createInitialUserAccounts } from '../db.ts';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.ts';
 import { createRateLimiter } from '../middleware/rateLimiter.ts';
+import { sendOtpEmail } from '../services/emailService.ts';
 
 const router = Router();
 
@@ -165,6 +166,15 @@ router.post('/login', loginLimiter, async (req, res: Response) => {
   }
 });
 
+// Helper to mask email for display (e.g., al••••e@example.com)
+function maskEmail(email: string): string {
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [name, domain] = parts;
+  if (name.length <= 2) return `${name[0]}*@${domain}`;
+  return `${name.slice(0, 2)}••••${name.slice(-1)}@${domain}`;
+}
+
 // Helper to mask phone number for display (e.g., +91 ••••••4321)
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -172,21 +182,15 @@ function maskPhone(phone: string): string {
   return `••••••${digits.slice(-4)}`;
 }
 
-// POST /api/auth/send-otp - Generate & send 6-digit SMS OTP for password reset
+// POST /api/auth/send-otp - Generate & send 6-digit OTP for password reset via Email (Resend) or SMS
 router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
   try {
-    const { email, phone } = req.body;
+    const { email, phone, channel } = req.body;
     if (!email || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ error: 'Registered email address is required' });
     }
-    if (!phone || typeof phone !== 'string' || phone.replace(/\D/g, '').length < 10) {
-      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number for SMS OTP' });
-    }
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.replace(/\s+/g, '').trim();
-    const inputDigits = cleanPhone.replace(/\D/g, '').slice(-10);
-
     const user = await db.prepare('SELECT id, name, email, phone FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (!user) {
       return res.status(404).json({
@@ -195,24 +199,94 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
       });
     }
 
-    // Strict Security: Account must have a pre-registered mobile number on file
-    if (!user.phone || user.phone.replace(/\D/g, '').length < 10) {
-      return res.status(400).json({
-        error: 'This account does not have a registered mobile number for SMS OTP reset. Please sign in with your password or update your mobile number in Profile settings.',
+    // Determine delivery channel: 'email' (default & recommended) or 'sms'
+    const deliveryChannel = (channel === 'sms' || (phone && channel !== 'email')) ? 'sms' : 'email';
+
+    if (deliveryChannel === 'sms') {
+      if (!phone || typeof phone !== 'string' || phone.replace(/\D/g, '').length < 10) {
+        return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number for SMS OTP' });
+      }
+
+      const cleanPhone = phone.replace(/\s+/g, '').trim();
+      const inputDigits = cleanPhone.replace(/\D/g, '').slice(-10);
+
+      // Strict Security: Account must have a pre-registered mobile number on file
+      if (!user.phone || user.phone.replace(/\D/g, '').length < 10) {
+        return res.status(400).json({
+          error: 'This account does not have a registered mobile number for SMS OTP reset. Please sign in with your password or use Email OTP.',
+        });
+      }
+
+      const savedDigits = user.phone.replace(/\D/g, '').slice(-10);
+      if (savedDigits !== inputDigits) {
+        return res.status(400).json({
+          error: `Mobile number does not match the registered phone ending in ${savedDigits.slice(-4)}.`,
+        });
+      }
+
+      // Invalidate any previous unused OTPs for this email
+      await db.prepare('UPDATE otp_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(cleanEmail);
+
+      const otpCode = crypto.randomInt(100000, 999999).toString();
+      const otpId = `otp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
+
+      await db.prepare(`
+        INSERT INTO otp_codes (id, user_id, email, phone, otp_code, expires_at, used, attempts)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+      `).run(otpId, user.id, cleanEmail, cleanPhone, otpCode, expiresAt);
+
+      const smsText = `[Money Vedass] Your SMS OTP to reset password for ${cleanEmail} is ${otpCode}. Valid for 5 minutes. Do not share this code.`;
+      console.log(`📱 SMS OTP Dispatch -> To: ${cleanPhone} | Message: ${smsText}`);
+
+      let externalGatewaySent = false;
+      if (process.env.FAST2SMS_API_KEY) {
+        try {
+          const smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+            method: 'POST',
+            headers: {
+              authorization: process.env.FAST2SMS_API_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              route: 'v3',
+              sender_id: 'TXTIND',
+              message: smsText,
+              language: 'english',
+              flash: 0,
+              numbers: inputDigits,
+            }),
+          });
+          externalGatewaySent = smsRes.ok;
+        } catch (e) {
+          console.warn('External SMS gateway error:', e);
+        }
+      }
+
+      const isNonProduction = process.env.NODE_ENV !== 'production';
+      const allowDevOtpSimulation = isNonProduction && process.env.ENABLE_DEV_OTP_SIMULATION === 'true';
+
+      return res.json({
+        success: true,
+        channel: 'sms',
+        maskedPhone: maskPhone(cleanPhone),
+        expiresInSeconds: 300,
+        externalGatewaySent,
+        ...(allowDevOtpSimulation ? {
+          smsNotification: {
+            sender: 'VM-MNYVDS',
+            recipient: cleanPhone,
+            otpCode,
+            text: smsText,
+          },
+        } : {}),
+        message: `6-digit SMS OTP sent to mobile ${maskPhone(cleanPhone)}`,
       });
     }
 
-    const savedDigits = user.phone.replace(/\D/g, '').slice(-10);
-    if (savedDigits !== inputDigits) {
-      return res.status(400).json({
-        error: `Mobile number does not match the registered phone ending in ${savedDigits.slice(-4)}.`,
-      });
-    }
-
-    // Invalidate any previous unused OTPs for this email
+    // Default: EMAIL OTP via Resend
     await db.prepare('UPDATE otp_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(cleanEmail);
 
-    // Generate 6-digit cryptographically secure OTP
     const otpCode = crypto.randomInt(100000, 999999).toString();
     const otpId = `otp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
@@ -220,54 +294,29 @@ router.post('/send-otp', otpSendLimiter, async (req, res: Response) => {
     await db.prepare(`
       INSERT INTO otp_codes (id, user_id, email, phone, otp_code, expires_at, used, attempts)
       VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-    `).run(otpId, user.id, cleanEmail, cleanPhone, otpCode, expiresAt);
+    `).run(otpId, user.id, cleanEmail, user.phone || '', otpCode, expiresAt);
 
-    const smsText = `[Money Vedass] Your SMS OTP to reset password for ${cleanEmail} is ${otpCode}. Valid for 5 minutes. Do not share this code.`;
-    console.log(`📱 SMS OTP Dispatch -> To: ${cleanPhone} | Message: ${smsText}`);
-
-    // Optional real SMS dispatch if FAST2SMS_API_KEY is configured in environment
-    let externalGatewaySent = false;
-    if (process.env.FAST2SMS_API_KEY) {
-      try {
-        const smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-          method: 'POST',
-          headers: {
-            authorization: process.env.FAST2SMS_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            route: 'v3',
-            sender_id: 'TXTIND',
-            message: smsText,
-            language: 'english',
-            flash: 0,
-            numbers: inputDigits,
-          }),
-        });
-        externalGatewaySent = smsRes.ok;
-      } catch (e) {
-        console.warn('External SMS gateway error:', e);
-      }
-    }
+    // Send via Resend
+    const emailResult = await sendOtpEmail(cleanEmail, otpCode, user.name);
 
     const isNonProduction = process.env.NODE_ENV !== 'production';
-    const allowDevOtpSimulation = isNonProduction && process.env.ENABLE_DEV_OTP_SIMULATION === 'true';
+    const allowDevOtpSimulation = isNonProduction && (process.env.ENABLE_DEV_OTP_SIMULATION === 'true' || emailResult.simulated);
 
-    res.json({
+    return res.json({
       success: true,
-      maskedPhone: maskPhone(cleanPhone),
+      channel: 'email',
+      maskedEmail: maskEmail(cleanEmail),
       expiresInSeconds: 300,
-      externalGatewaySent,
-      // Security: Plaintext OTP is strictly gated to local dev simulation flag only, NEVER exposed in production
+      externalGatewaySent: !emailResult.simulated && emailResult.success,
       ...(allowDevOtpSimulation ? {
-        smsNotification: {
-          sender: 'VM-MNYVDS',
-          recipient: cleanPhone,
+        emailNotification: {
+          recipient: cleanEmail,
           otpCode,
-          text: smsText,
+          provider: 'Resend',
+          text: `Your Money Vedass verification code is ${otpCode}. Valid for 5 minutes.`,
         },
       } : {}),
-      message: `6-digit SMS OTP sent to mobile ${maskPhone(cleanPhone)}`,
+      message: `6-digit verification code sent to ${maskEmail(cleanEmail)} via Email`,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
