@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AddTransactionModal } from './components/common/AddTransactionModal';
 import { ExportModal } from './components/common/ExportModal';
 import { HelpModal } from './components/common/HelpModal';
+import { InstallPwaPrompt } from './components/common/InstallPwaPrompt';
 import { ToastBanner } from './components/common/ToastBanner';
 import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
 import { MobileNav } from './components/layout/MobileNav';
@@ -43,6 +44,18 @@ function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+
+  // Check for PWA shortcut launch parameters (?shortcut=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shortcut = params.get('shortcut');
+    if (shortcut && isAuthenticated) {
+      setViewMode('app');
+      if (['dashboard', 'transactions', 'subscriptions', 'budgets', 'goals', 'analytics'].includes(shortcut)) {
+        setCurrentRoute(shortcut);
+      }
+    }
+  }, [isAuthenticated]);
 
   // Return to landing page if user logs out while inside the app
   React.useEffect(() => {
@@ -244,6 +257,7 @@ export default function App() {
       <AuthProvider>
         <FinanceProvider>
           <AppContent />
+          <InstallPwaPrompt />
         </FinanceProvider>
       </AuthProvider>
     </ThemeProvider>
