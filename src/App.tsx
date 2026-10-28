@@ -179,7 +179,10 @@ function AppContent() {
       <div
         className={`flex-1 flex flex-col transition-all duration-200 ${
           sidebarCollapsed ? 'md:ml-18' : 'md:ml-64'
-        } pb-20 md:pb-8`}
+        } md:pb-8`}
+        style={{
+          paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))',
+        }}
       >
         {/* Top Navigation */}
         <TopNavbar

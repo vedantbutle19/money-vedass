@@ -40,7 +40,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-900">
       {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between max-w-7xl mx-auto w-full">
+      <header
+        className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between max-w-7xl mx-auto w-full transition-all"
+        style={{
+          paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1rem)',
+        }}
+      >
         <Logo size="md" />
 
         <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-slate-600 dark:text-slate-400">
@@ -561,7 +566,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 py-10 px-6 max-w-7xl mx-auto w-full text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer
+        className="mt-auto border-t border-slate-200 dark:border-slate-800 py-10 px-6 max-w-7xl mx-auto w-full text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4"
+        style={{
+          paddingBottom: 'max(calc(2.5rem + env(safe-area-inset-bottom, 0px)), 2.5rem)',
+        }}
+      >
         <div className="flex items-center gap-2">
           <Logo size="sm" />
           <span className="text-slate-400">· 100% Free Personal Finance Operating System</span>

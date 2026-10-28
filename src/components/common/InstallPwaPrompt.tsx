@@ -87,7 +87,12 @@ export const InstallPwaPrompt: React.FC = () => {
   return (
     <>
       {/* Floating PWA Install Banner */}
-      <div className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto md:w-96 z-40 bg-slate-900/95 dark:bg-slate-900/95 text-white border border-slate-700/80 rounded-2xl shadow-2xl p-4 backdrop-blur-md animate-in slide-in-from-bottom-5 duration-300">
+      <div
+        className="fixed right-4 left-4 md:left-auto md:w-96 z-40 bg-slate-900/95 dark:bg-slate-900/95 text-white border border-slate-700/80 rounded-2xl shadow-2xl p-4 backdrop-blur-md animate-in slide-in-from-bottom-5 duration-300 md:bottom-6"
+        style={{
+          bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-indigo-600 p-0.5 shrink-0 shadow-sm flex items-center justify-center">

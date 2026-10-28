@@ -59,19 +59,25 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 h-16 w-full border-b border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4">
+    <header
+      className="sticky top-0 z-20 w-full border-b border-slate-200/90 dark:border-slate-800 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md px-3.5 sm:px-6 flex items-center justify-between gap-3 transition-all"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px), 0px)',
+        minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))',
+      }}
+    >
       {/* Left: Mobile Toggle & Breadcrumbs / Title */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           onClick={onOpenMobileMenu}
-          className="md:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          className="md:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors shrink-0 cursor-pointer"
           aria-label="Open Navigation Drawer"
         >
           <Menu size={20} />
         </button>
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 font-medium">
+        <div className="min-w-0 flex flex-col justify-center">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 font-medium">
             {breadcrumbs.map((crumb, idx) => (
               <React.Fragment key={crumb}>
                 <span>{crumb}</span>
@@ -79,14 +85,14 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               </React.Fragment>
             ))}
           </div>
-          <h1 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white truncate leading-tight">
+          <h1 className="text-base sm:text-lg font-bold sm:font-semibold text-slate-900 dark:text-white truncate leading-tight">
             {title}
           </h1>
         </div>
       </div>
 
       {/* Right: Actions, Search, Notifications, Theme, Profile */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Search button affordance */}
         <button
           onClick={openSearchModal}

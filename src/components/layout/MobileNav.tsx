@@ -59,7 +59,14 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   return (
     <>
       {/* Bottom Sticky Tab Bar (Mobile only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-2 py-1 flex items-center justify-around">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-3 flex items-center justify-around shadow-lg"
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+          paddingTop: '6px',
+          minHeight: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         {mainTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentRoute === tab.id;
@@ -69,7 +76,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
               <button
                 key={tab.id}
                 onClick={() => openAddTxModal('expense')}
-                className="-mt-5 w-12 h-12 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow-md active:scale-95 transition-transform"
+                className="-mt-5 w-12 h-12 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
                 aria-label="Add Transaction"
               >
                 <Plus size={22} strokeWidth={2.5} />
@@ -82,7 +89,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setShowMoreSheet(true)}
-                className="flex flex-col items-center justify-center min-w-[56px] py-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="flex flex-col items-center justify-center min-w-[56px] py-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <Icon size={18} />
                 <span className="text-[10px] font-medium mt-0.5">{tab.label}</span>
@@ -94,7 +101,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
             <button
               key={tab.id}
               onClick={() => onNavigate(tab.id)}
-              className={`flex flex-col items-center justify-center min-w-[56px] py-1 transition-colors ${
+              className={`flex flex-col items-center justify-center min-w-[56px] py-1 transition-colors cursor-pointer ${
                 isActive
                   ? 'text-slate-900 dark:text-white font-semibold'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
@@ -118,7 +125,13 @@ export const MobileNav: React.FC<MobileNavProps> = ({
             }}
           />
 
-          <div className="relative w-4/5 max-w-xs bg-white dark:bg-slate-900 h-full p-4 flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+          <div
+            className="relative w-4/5 max-w-xs bg-white dark:bg-slate-900 h-full p-4 flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200"
+            style={{
+              paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+              paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)',
+            }}
+          >
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
                 <Logo />
@@ -127,13 +140,13 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                     onCloseDrawer();
                     setShowMoreSheet(false);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg"
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="mt-4 space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
+              <div className="mt-4 space-y-1 overflow-y-auto max-h-[calc(100vh-140px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))]">
                 {drawerItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentRoute === item.id;

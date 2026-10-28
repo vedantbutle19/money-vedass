@@ -248,10 +248,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center px-4 py-12 relative">
+    <div
+      className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center px-4 py-12 relative"
+      style={{
+        paddingTop: 'max(calc(3rem + env(safe-area-inset-top, 0px)), 3rem)',
+        paddingBottom: 'max(calc(3rem + env(safe-area-inset-bottom, 0px)), 3rem)',
+      }}
+    >
       <button
         onClick={onBackToLanding}
-        className="absolute top-6 left-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+        className="absolute left-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+        style={{
+          top: 'max(calc(1.5rem + env(safe-area-inset-top, 0px)), 1.5rem)',
+        }}
       >
         <ArrowLeft size={14} />
         <span>Back to Landing</span>
