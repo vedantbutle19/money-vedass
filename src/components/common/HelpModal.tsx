@@ -10,10 +10,21 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      style={{
+        paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+        paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+      }}
+    >
       <div className="fixed inset-0" onClick={onClose} />
 
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 z-10 text-xs space-y-4">
+      <div
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 z-10 text-xs space-y-4 my-auto overflow-y-auto"
+        style={{
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+        }}
+      >
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <HelpCircle size={16} className="text-slate-600 dark:text-slate-300" />

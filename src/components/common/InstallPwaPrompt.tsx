@@ -138,8 +138,19 @@ export const InstallPwaPrompt: React.FC = () => {
 
       {/* iOS Instructions Modal */}
       {showIOSGuide && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-white text-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto"
+          style={{
+            paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+            paddingBottom: 'max(calc(1.5rem + env(safe-area-inset-bottom, 0px)), 1.5rem)',
+          }}
+        >
+          <div
+            className="relative w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-white text-xs overflow-y-auto"
+            style={{
+              maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
+            }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
               <div className="flex items-center gap-2">
                 <Smartphone className="text-emerald-400" size={18} />

@@ -79,11 +79,22 @@ export const ExportModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      style={{
+        paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+        paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+      }}
+    >
       <div className="fixed inset-0" onClick={closeExportModal} />
 
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 z-10">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+      <div
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 z-10 my-auto flex flex-col"
+        style={{
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+        }}
+      >
+        <div className="flex-shrink-0 flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white">
               Export Financial Report
@@ -94,13 +105,13 @@ export const ExportModal: React.FC = () => {
           </div>
           <button
             onClick={closeExportModal}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="py-4 space-y-4 text-xs">
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
           {/* Format selection */}
           <div>
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -176,7 +187,7 @@ export const ExportModal: React.FC = () => {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+        <div className="flex-shrink-0 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
           <button
             onClick={closeExportModal}
             className="px-3.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"

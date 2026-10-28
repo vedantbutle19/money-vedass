@@ -78,16 +78,27 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center px-3 sm:px-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      style={{
+        paddingTop: 'max(calc(1.5rem + env(safe-area-inset-top, 0px)), 3rem)',
+        paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.5rem)',
+      }}
+    >
       <div
         className="fixed inset-0"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-10 animate-in zoom-in-95 duration-150">
+      <div
+        className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-10 animate-in zoom-in-95 duration-150 flex flex-col"
+        style={{
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 4rem)',
+        }}
+      >
         {/* Search Input Bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-slate-800">
           <Search size={18} className="text-slate-400 shrink-0" />
           <input
             ref={inputRef}
@@ -111,7 +122,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         </div>
 
         {/* Results Container */}
-        <div className="max-h-[60vh] overflow-y-auto p-3 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
           {searchResults.isSuggestions && (
             <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider px-2">
               Recent Activity &amp; Quick Access

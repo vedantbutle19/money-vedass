@@ -465,9 +465,20 @@ export const SubscriptionsPage: React.FC = () => {
 
       {/* Pay & Deduct Modal */}
       {deductModalSub && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto"
+          style={{
+            paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+            paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+          }}
+        >
           <div className="fixed inset-0" onClick={() => !isDeducting && setDeductModalSub(null)} />
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 z-10 text-xs animate-in zoom-in-95 duration-150">
+          <div
+            className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 z-10 text-xs animate-in zoom-in-95 duration-150 my-auto overflow-y-auto"
+            style={{
+              maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+            }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
@@ -599,9 +610,20 @@ export const SubscriptionsPage: React.FC = () => {
 
       {/* Add / Configure Bill Modal */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto"
+          style={{
+            paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+            paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+          }}
+        >
           <div className="fixed inset-0" onClick={() => setIsAddOpen(false)} />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 z-10 text-xs animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+          <div
+            className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 z-10 text-xs animate-in zoom-in-95 duration-150 my-auto overflow-y-auto"
+            style={{
+              maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+            }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 Add Recurring Commitment / Bill

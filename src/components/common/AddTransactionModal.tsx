@@ -152,12 +152,23 @@ export const AddTransactionModal: React.FC = () => {
     SUPPORTED_CURRENCIES.find((c) => c.code === currency)?.symbol || '₹';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      style={{
+        paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+        paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+      }}
+    >
       <div className="fixed inset-0" onClick={closeAddTxModal} />
 
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-10 my-8">
+      <div
+        className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-10 my-auto flex flex-col"
+        style={{
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+        }}
+      >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex-shrink-0 flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white">
               Add Transaction
@@ -168,14 +179,14 @@ export const AddTransactionModal: React.FC = () => {
           </div>
           <button
             onClick={closeAddTxModal}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Transaction Type Segmented Control */}
-        <div className="px-6 pt-4">
+        <div className="flex-shrink-0 px-5 sm:px-6 pt-3 pb-1">
           <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
             <button
               type="button"
@@ -223,7 +234,7 @@ export const AddTransactionModal: React.FC = () => {
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
           {/* Amount & Currency input */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
@@ -508,18 +519,18 @@ export const AddTransactionModal: React.FC = () => {
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 -mx-5 sm:-mx-6 px-5 sm:px-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 mt-4">
             <button
               type="button"
               onClick={closeAddTxModal}
-              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all active:scale-[0.98] disabled:opacity-50"
+              className="px-5 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? 'Saving...' : 'Save Transaction'}
             </button>

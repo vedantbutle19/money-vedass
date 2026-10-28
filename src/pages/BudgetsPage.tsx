@@ -247,9 +247,20 @@ export const BudgetsPage: React.FC = () => {
 
       {/* Edit Budget Modal */}
       {editingBudget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto"
+          style={{
+            paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+            paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+          }}
+        >
           <div className="fixed inset-0" onClick={() => setEditingBudget(null)} />
-          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-5 z-10 text-xs">
+          <div
+            className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-5 z-10 text-xs my-auto overflow-y-auto"
+            style={{
+              maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+            }}
+          >
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
               Adjust {editingBudget.categoryName} Budget
             </h3>
@@ -292,9 +303,20 @@ export const BudgetsPage: React.FC = () => {
 
       {/* Add New Category Budget Modal */}
       {isAddBudgetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto"
+          style={{
+            paddingTop: 'max(calc(1rem + env(safe-area-inset-top, 0px)), 1.25rem)',
+            paddingBottom: 'max(calc(1rem + env(safe-area-inset-bottom, 0px)), 1.25rem)',
+          }}
+        >
           <div className="fixed inset-0" onClick={() => setIsAddBudgetOpen(false)} />
-          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-5 z-10 text-xs">
+          <div
+            className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-5 z-10 text-xs my-auto overflow-y-auto"
+            style={{
+              maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2.5rem)',
+            }}
+          >
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
               Add Category Budget
             </h3>
