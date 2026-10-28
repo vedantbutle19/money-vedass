@@ -95,8 +95,8 @@ export const InstallPwaPrompt: React.FC = () => {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-indigo-600 p-0.5 shrink-0 shadow-sm flex items-center justify-center">
-              <img src="/icon-192.png" alt="Money Vedass" className="w-full h-full rounded-[10px] object-cover" />
+            <div className="w-10 h-10 rounded-xl shrink-0 shadow-sm flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="Money Vedass" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

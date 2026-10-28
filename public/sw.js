@@ -1,5 +1,5 @@
 // Money Vedass Progressive Web App Service Worker
-const CACHE_NAME = 'money-vedass-v1';
+const CACHE_NAME = 'money-vedass-v2';
 
 // Static app shell assets cached immediately upon installation
 const PRECACHE_ASSETS = [
@@ -7,6 +7,8 @@ const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
   '/favicon.png',
+  '/favicon.ico',
+  '/logo.png',
   '/icon-192.png',
   '/icon-512.png',
   '/icon.svg',
