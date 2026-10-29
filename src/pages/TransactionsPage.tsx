@@ -10,9 +10,12 @@ import {
   Edit2,
   Eye,
   Filter,
+  Paperclip,
   Plus,
+  Receipt as ReceiptIcon,
   RotateCcw,
   Search,
+  Sparkles,
   Square,
   Trash2,
   X,
@@ -20,6 +23,7 @@ import {
 import React, { useMemo, useState } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { CategoryId, PaymentMethod, Transaction, TransactionType } from '../types';
+import { ReceiptViewerModal } from '../components/common/ReceiptViewerModal';
 
 export const TransactionsPage: React.FC = () => {
   const {
@@ -56,6 +60,7 @@ export const TransactionsPage: React.FC = () => {
 
   // Selected for View modal
   const [viewTx, setViewTx] = useState<Transaction | null>(null);
+  const [viewReceiptTx, setViewReceiptTx] = useState<Transaction | null>(null);
 
   // Clear all filters
   const handleClearFilters = () => {
@@ -198,14 +203,21 @@ export const TransactionsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={openExportModal}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
           >
             <Download size={14} />
             <span>Export CSV</span>
           </button>
           <button
             onClick={() => openAddTxModal('expense')}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800/50 rounded-lg transition-all cursor-pointer"
+          >
+            <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400" />
+            <span>Scan Bill</span>
+          </button>
+          <button
+            onClick={() => openAddTxModal('expense')}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-2xs transition-all cursor-pointer"
           >
             <Plus size={15} strokeWidth={2.5} />
             <span>Add Transaction</span>
@@ -476,8 +488,23 @@ export const TransactionsPage: React.FC = () => {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 dark:text-white truncate">
-                              {tx.merchant || tx.description}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-slate-900 dark:text-white truncate">
+                                {tx.merchant || tx.description}
+                              </span>
+                              {tx.receiptUrl && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewReceiptTx(tx);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded border border-indigo-200 dark:border-indigo-800/60 transition-colors shrink-0 cursor-pointer"
+                                  title="View attached bill/receipt"
+                                >
+                                  <Paperclip size={10} /> Bill
+                                </button>
+                              )}
                             </div>
                             {tx.merchant && (
                               <div className="text-[11px] text-slate-400 truncate">
@@ -676,13 +703,25 @@ export const TransactionsPage: React.FC = () => {
                     <p className="text-slate-700 dark:text-slate-300 italic">{viewTx.notes}</p>
                   </div>
                 )}
+                {viewTx.receiptUrl && (
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-400">Attached Bill</span>
+                    <button
+                      type="button"
+                      onClick={() => setViewReceiptTx(viewTx)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200 dark:border-indigo-800/80 transition-colors cursor-pointer"
+                    >
+                      <ReceiptIcon size={14} /> View Bill Image
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
               <button
                 onClick={() => setViewTx(null)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg cursor-pointer"
               >
                 Close
               </button>
@@ -690,6 +729,16 @@ export const TransactionsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Bill / Receipt Full Preview Modal */}
+      <ReceiptViewerModal
+        isOpen={Boolean(viewReceiptTx)}
+        onClose={() => setViewReceiptTx(null)}
+        receiptUrl={viewReceiptTx?.receiptUrl}
+        title={viewReceiptTx?.merchant || viewReceiptTx?.description || 'Bill Attachment'}
+        amount={viewReceiptTx?.amount}
+        date={viewReceiptTx?.date}
+      />
     </div>
   );
 };

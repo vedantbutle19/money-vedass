@@ -91,6 +91,26 @@ async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T
   return res.json();
 }
 
+export interface ExtractedReceiptData {
+  merchant?: string;
+  amount?: number;
+  currency?: string;
+  date?: string;
+  category?: string;
+  paymentMethod?: string;
+  description?: string;
+  notes?: string;
+  confidence?: number;
+  isSimulated?: boolean;
+  message?: string;
+}
+
+export interface ReceiptScanResponse {
+  success: boolean;
+  data: ExtractedReceiptData;
+  receiptUrl: string;
+}
+
 export const financeService = {
   // User Profile
   async getUserProfile(): Promise<UserProfile> {
@@ -677,5 +697,40 @@ export const financeService = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  // Bill & Receipt AI Scanner
+  async scanReceipt(
+    imageBase64: string,
+    mimeType = 'image/jpeg',
+    fileName?: string
+  ): Promise<ReceiptScanResponse> {
+    try {
+      return await apiRequest<ReceiptScanResponse>('/transactions/scan-receipt', {
+        method: 'POST',
+        body: JSON.stringify({
+          image: imageBase64,
+          mimeType,
+          fileName,
+        }),
+      });
+    } catch (err: any) {
+      console.warn('API receipt scan failed, using local offline fallback:', err);
+      return {
+        success: true,
+        data: {
+          merchant: fileName ? fileName.replace(/\.[^/.]+$/, '') : 'Uploaded Bill',
+          currency: 'INR',
+          date: new Date().toISOString().split('T')[0],
+          category: 'bills',
+          paymentMethod: 'UPI',
+          description: `Bill: ${fileName || 'Uploaded Bill'}`,
+          notes: 'Attached bill image',
+          isSimulated: true,
+          message: 'Attached image offline. Please verify fields.',
+        },
+        receiptUrl: imageBase64,
+      };
+    }
   },
 };

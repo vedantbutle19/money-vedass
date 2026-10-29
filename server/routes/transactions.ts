@@ -1,11 +1,63 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
 import { db } from '../db.ts';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.ts';
+import { receiptService, UPLOAD_DIR } from '../services/receiptService.ts';
 
 const router = Router();
 
+// Publicly serve uploaded receipt images safely with path traversal protection
+router.get('/receipts/:filename', (req: Request, res: Response) => {
+  const { filename } = req.params;
+  if (!filename || !/^[a-zA-Z0-9_.-]+$/.test(filename) || filename.includes('..')) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  const uploadDir = UPLOAD_DIR;
+  const filePath = path.resolve(uploadDir, filename);
+
+  if (!filePath.startsWith(uploadDir) || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Receipt not found' });
+  }
+
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.pdf': 'application/pdf',
+  };
+
+  const contentType = mimeTypes[ext] || 'application/octet-stream';
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 // Require authentication for all transaction routes
 router.use(requireAuth);
+
+// POST /api/transactions/scan-receipt - Scan bill or receipt image using AI Vision
+router.post('/scan-receipt', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { image, mimeType, fileName } = req.body;
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ error: 'Base64 image data is required' });
+    }
+
+    const result = await receiptService.scanReceipt(image, mimeType || 'image/jpeg', fileName);
+    res.json({
+      success: true,
+      data: result.data,
+      receiptUrl: result.receiptUrl,
+    });
+  } catch (err: any) {
+    console.error('Scan receipt error:', err);
+    res.status(500).json({ error: err.message || 'Failed to scan receipt image' });
+  }
+});
 
 function formatTransaction(row: any) {
   let tags: string[] = [];
